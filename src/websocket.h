@@ -15,6 +15,7 @@
 #include "messagerequest.h"
 #include "collection.h"
 
+// comment
 class WebSocket : public QObject
 {
     Q_OBJECT
