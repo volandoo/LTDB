@@ -208,7 +208,7 @@ class LTDBClient {
     public async fetchSessions(params: LTDBFetchSessionsParams) {
         const resp = await this.send<LTDBQueryResponse>({
             type: "query",
-            data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "" }),
+            data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "", from: params.from || 0 }),
         });
         return resp.records;
     }

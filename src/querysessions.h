@@ -5,6 +5,7 @@
 
 struct QuerySessions {
     qint64 ts;
+    qint64 from;
     QString key;
     QString collection;
     

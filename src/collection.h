@@ -16,7 +16,7 @@ public:
     void insert(qint64 timestamp, const QString& key, const QString& data);
     DataRecord* getLatestRecordForUser(const QString& key, qint64 timestamp);
     DataRecord* getEarliestRecordForUser(const QString& key, qint64 timestamp);
-    QHash<QString, DataRecord*> getAllRecords(qint64 timestamp, const QString& key);
+    QHash<QString, DataRecord*> getAllRecords(qint64 timestamp, const QString& key, qint64 from = 0);
     QList<DataRecord*> getAllRecordsForUser(const QString& key, qint64 from, qint64 to, bool reverse = false, qint64 limit = 0);
     QHash<QString, QList<DataRecord*>> getSessionData(qint64 from, qint64 to);
     

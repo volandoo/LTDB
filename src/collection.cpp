@@ -119,7 +119,7 @@ DataRecord *Collection::getEarliestRecordForUser(const QString &key, qint64 time
     return it->second[index].get();
 }
 
-QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const QString &key)
+QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const QString &key, qint64 from)
 {
     QHash<QString, DataRecord *> result;
     if (key.isEmpty())
@@ -129,7 +129,10 @@ QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const Q
             const int index = getLatestRecordIndex(records, timestamp);
             if (index != -1)
             {
-                result.insert(key, records[index].get());
+                auto record = records[index].get();
+                if (from == 0 || record->timestamp >= from) {
+                    result.insert(key, record);
+                }
             }
         }
     }
@@ -143,7 +146,10 @@ QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const Q
         const int index = getLatestRecordIndex(it->second, timestamp);
         if (index != -1)
         {
-            result.insert(key, it->second[index].get());
+            auto record = it->second[index].get();
+            if (from == 0 || record->timestamp >= from) {
+                result.insert(key, record);
+            }
         }
     }
     return result;

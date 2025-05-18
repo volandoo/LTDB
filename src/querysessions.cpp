@@ -25,8 +25,10 @@ QuerySessions QuerySessions::fromJson(const QString& jsonString, bool* ok)
     QJsonObject obj = doc.object();
     
     payload.ts = obj["ts"].toVariant().toLongLong();
+    payload.from = obj["from"].toVariant().toLongLong();
     payload.key = obj["key"].toString();
     payload.collection = obj["collection"].toString();
+
 
     if (ok) *ok = payload.isValid();
     return payload;

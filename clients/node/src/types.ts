@@ -61,6 +61,7 @@ export type LTDBFetchSessionsParams = {
     collection: string;
     ts: number;
     key?: string;
+    from?: number;
 };
 
 export type LTDBDeleteCollectionParams = {

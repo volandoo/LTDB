@@ -251,7 +251,7 @@ QString WebSocket::handleQuerySessions(QWebSocket *client, const MessageRequest 
         QJsonDocument doc(obj);
         return doc.toJson(QJsonDocument::Compact);
     }
-    auto records = database->getAllRecords(query.ts, query.key);
+    auto records = database->getAllRecords(query.ts, query.key, query.from);
 
     foreach (const QString &key, records.keys())
     {
