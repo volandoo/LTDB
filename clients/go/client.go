@@ -125,12 +125,23 @@ func (c *Client) readMessages() {
 		default:
 		}
 
+		// Check if connection is still valid before reading
+		if c.conn == nil {
+			return
+		}
+
 		var response map[string]interface{}
 		err := c.conn.ReadJSON(&response)
 		if err != nil {
-			log.Printf("Error reading message: %v", err)
-			c.reconnect()
-			return
+			// Only log and reconnect if context is not cancelled
+			select {
+			case <-c.ctx.Done():
+				return
+			default:
+				log.Printf("Error reading message: %v", err)
+				c.reconnect()
+				return
+			}
 		}
 
 		id, ok := response["id"].(string)
@@ -162,6 +173,9 @@ func (c *Client) readMessages() {
 
 // cleanupConnection cleans up the connection and inflight requests
 func (c *Client) cleanupConnection() {
+	c.connectionMutex.Lock()
+	defer c.connectionMutex.Unlock()
+
 	if c.conn != nil {
 		c.conn.Close()
 		c.conn = nil
@@ -169,7 +183,12 @@ func (c *Client) cleanupConnection() {
 
 	c.inflightMutex.Lock()
 	for id, ch := range c.inflightRequests {
-		close(ch)
+		select {
+		case <-ch:
+			// Channel already closed
+		default:
+			close(ch)
+		}
 		delete(c.inflightRequests, id)
 	}
 	c.inflightMutex.Unlock()
@@ -257,8 +276,11 @@ func (c *Client) generateID() string {
 // Close closes the client connection
 func (c *Client) Close() {
 	c.cancel()
+
+	// Wait a moment for the readMessages goroutine to exit
+	time.Sleep(100 * time.Millisecond)
+
 	c.cleanupConnection()
-	fmt.Println("Client closed")
 }
 
 // FetchCollections fetches all available collections
