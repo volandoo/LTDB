@@ -31,7 +31,7 @@ type WebSocketMessage = {
 class LTDBClient {
     private ws: WebSocket | null = null;
     private readonly url: string;
-    private inflightRequests: { [id: string]: (response: any) => void } = {};
+    private inflightRequests: { [id: string]: (response: any) => void; } = {};
     private isConnecting: boolean = false; // Track if we're currently attempting to connect
     private isReconnecting: boolean = false; // Flag to prevent concurrent reconnect attempts
     private reconnectAttempts: number = 0;
@@ -40,7 +40,7 @@ class LTDBClient {
     private connectionPromise: Promise<void> | null = null; // Promise to track connection status
     private apiKey: string;
 
-    constructor({ url, apiKey }: { url: string; apiKey: string }) {
+    constructor({ url, apiKey }: { url: string; apiKey: string; }) {
         this.url = url;
         this.apiKey = apiKey;
     }
@@ -196,6 +196,22 @@ class LTDBClient {
         }, this.reconnectInterval);
     }
 
+    // Sessions API
+    // A session is a time series of records for a single key in a collection
+    // For example, where user is a collection and key is a user id:
+    // TS is always in seconds.
+    // {
+    //     "users": [
+    //         "user_1": {
+    //             "ts": 1747604423,
+    //             "data": { "temperature": 22.5 }
+    //         },
+    //         "user_2": {
+    //             "ts": 1747604424,
+    //             "data": { "temperature": 22.6 }
+    //         }
+    //     ]
+    // }
     public async fetchCollections() {
         const resp = await this.send<LTDBCollectionsResponse>({
             type: "collections",
@@ -204,7 +220,6 @@ class LTDBClient {
         return resp.collections;
     }
 
-    // can throw error
     public async fetchSessions(params: LTDBFetchSessionsParams) {
         const resp = await this.send<LTDBQueryResponse>({
             type: "query",
@@ -220,8 +235,12 @@ class LTDBClient {
         });
     }
 
-    public async insert(items: LTDBInsertMessageRequest[]) {
+    public async insertMultipleRecords(items: LTDBInsertMessageRequest[]) {
         return this.send({ data: JSON.stringify(items), type: "insert" });
+    }
+
+    public async insertRecord(items: LTDBInsertMessageRequest) {
+        return this.send({ data: JSON.stringify([items]), type: "insert" });
     }
 
     public async fetchRecords(params: LTDBFetchRecordsParams) {
@@ -246,13 +265,14 @@ class LTDBClient {
         });
     }
 
-    // can throw error
-    public async deleteUser(params: LTDBDeleteUserParams) {
+    public async deleteSession(params: LTDBDeleteUserParams) {
         await this.send<LTDBInsertMessageResponse>({
             type: "delete-user",
             data: JSON.stringify(params),
         });
     }
+
+    // Key Value API
     public async setValue(params: LTDBSetValueParams) {
         await this.send<LTDBInsertMessageResponse>({
             type: "set-value",

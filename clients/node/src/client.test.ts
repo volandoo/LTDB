@@ -1,0 +1,87 @@
+/// <reference types="jest" />
+
+// test the client
+
+import LTDBClient from './client';
+const testCollection = 'test_collection';
+
+const createMockData = () => {
+    const users = [
+        'user_1',
+        'user_2',
+        'user_3',
+    ];
+    const now = 1747604423;
+    const records = [];
+    for (const user of users) {
+        for (let i = 0; i < 1000; i++) {
+            const ts = now + i;
+            const data = JSON.stringify({ value: i });
+            records.push({ ts, key: user, data, collection: testCollection });
+        }
+    }
+    records.push({ ts: now - 1, key: 'user_4', data: 'test', collection: testCollection });
+
+    return records;
+}
+
+
+beforeAll(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => { });
+    jest.spyOn(console, 'warn').mockImplementation(() => { });
+    jest.spyOn(console, 'error').mockImplementation(() => { });
+});
+
+afterAll(() => {
+    // (console.log as jest.Mock).mockRestore();
+    // (console.warn as jest.Mock).mockRestore();
+    // (console.error as jest.Mock).mockRestore();
+});
+
+describe('LTDBClient Integration', () => {
+    const url = 'ws://localhost:8080';
+    const apiKey = 'my-secret-key';
+
+    const client = new LTDBClient({ url, apiKey });
+
+    beforeAll(async () => {
+        const records = createMockData();
+        await client.deleteCollection({ collection: testCollection });
+        await client.insert(records);
+    }, 10000);
+
+    afterAll(async () => {
+        client.close();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    });
+
+    it('should fetch latest session of all four', async () => {
+        const result = await client.fetchSessions({
+            collection: testCollection,
+            ts: Date.now(),
+        });
+        const keys = Object.keys(result);
+        expect(keys.length).toBe(4);
+        for (const key of keys) {
+            if (key === 'user_4') {
+                expect(result[key].ts).toBe(1747604423 - 1);
+            } else {
+                expect(result[key].ts).toBe(1747604423 + 999);
+            }
+        }
+    }, 10000);
+
+    it('should fetch latest session of only three', async () => {
+        const result = await client.fetchSessions({
+            collection: testCollection,
+            ts: Date.now(),
+            from: 1747604423 + 1,
+        });
+        const keys = Object.keys(result);
+        expect(keys.length).toBe(3);
+        for (const key of keys) {
+            expect(result[key].ts).toBe(1747604423 + 999);
+        }
+    }, 10000);
+});
+
