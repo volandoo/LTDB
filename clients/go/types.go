@@ -30,8 +30,8 @@ type LTDBRecordResponse struct {
 	Data string `json:"data"`
 }
 
-// LTDBQueryUserResponse represents the response to a user query
-type LTDBQueryUserResponse struct {
+// LTDBQueryCollectionResponse represents the response to a collection query
+type LTDBQueryCollectionResponse struct {
 	ID      string               `json:"id"`
 	Records []LTDBRecordResponse `json:"records"`
 }
@@ -65,12 +65,12 @@ type LTDBCollectionParam struct {
 	Collection string `json:"collection"`
 }
 
-// LTDBFetchSessionsParams represents parameters for fetching sessions
-type LTDBFetchSessionsParams struct {
+// LTDBFetchLatestRecordsParams represents parameters for fetching sessions
+type LTDBFetchLatestRecordsParams struct {
 	Collection string `json:"collection"`
 	TS         int64  `json:"ts"`
 	Key        string `json:"key,omitempty"`
-	From       int64  `json:"from,omitempty"`
+	From       *int64 `json:"from,omitempty"`
 }
 
 // LTDBDeleteCollectionParams represents parameters for deleting a collection
@@ -88,8 +88,8 @@ type LTDBFetchRecordsParams struct {
 	Reverse    *bool  `json:"reverse,omitempty"`
 }
 
-// LTDBDeleteUserParams represents parameters for deleting a user
-type LTDBDeleteUserParams struct {
+// LTDBDeleteDocumentParams represents parameters for deleting a document
+type LTDBDeleteDocumentParams struct {
 	Key        string `json:"key"`
 	Collection string `json:"collection"`
 }

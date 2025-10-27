@@ -14,6 +14,23 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	messageTypeAuth             = "auth"
+	messageTypeInsert           = "ins"
+	messageTypeQueryRecords     = "qry"
+	messageTypeQueryCollections = "cols"
+	messageTypeQueryDocument    = "qdoc"
+	messageTypeDeleteDocument   = "ddoc"
+	messageTypeDeleteCollection = "dcol"
+	messageTypeDeleteRecord     = "drec"
+	messageTypeDeleteMultiple   = "dmrec"
+	messageTypeSetValue         = "sval"
+	messageTypeGetValue         = "gval"
+	messageTypeRemoveValue      = "rval"
+	messageTypeGetAllValues     = "gvals"
+	messageTypeGetAllKeys       = "gkeys"
+)
+
 // Client represents an LTDB WebSocket client
 type Client struct {
 	url                  string
@@ -90,7 +107,7 @@ func (c *Client) Connect() error {
 
 	authMsg := WebSocketMessage{
 		ID:   messageID,
-		Type: "api-key",
+		Type: messageTypeAuth,
 		Data: c.apiKey,
 	}
 
@@ -286,22 +303,22 @@ func (c *Client) Close() {
 // FetchCollections fetches all available collections
 func (c *Client) FetchCollections() ([]string, error) {
 	var response LTDBCollectionsResponse
-	err := c.send("collections", "{}", &response)
+	err := c.send(messageTypeQueryCollections, "{}", &response)
 	if err != nil {
 		return nil, err
 	}
 	return response.Collections, nil
 }
 
-// FetchSessions fetches sessions based on parameters
-func (c *Client) FetchSessions(params LTDBFetchSessionsParams) (map[string]LTDBRecordResponse, error) {
+// FetchLatestDocumentRecords fetches the latest records per document for a collection
+func (c *Client) FetchLatestDocumentRecords(params LTDBFetchLatestRecordsParams) (map[string]LTDBRecordResponse, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
 	var response LTDBQueryResponse
-	err = c.send("query", string(data), &response)
+	err = c.send(messageTypeQueryRecords, string(data), &response)
 	if err != nil {
 		return nil, err
 	}
@@ -316,71 +333,71 @@ func (c *Client) DeleteCollection(params LTDBDeleteCollectionParams) error {
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("delete-collection", string(data), &response)
+	return c.send(messageTypeDeleteCollection, string(data), &response)
 }
 
-// InsertMultipleRecords inserts multiple records
-func (c *Client) InsertMultipleRecords(items []LTDBInsertMessageRequest) error {
+// InsertMultipleDocumentRecords inserts multiple records into a document
+func (c *Client) InsertMultipleDocumentRecords(items []LTDBInsertMessageRequest) error {
 	data, err := json.Marshal(items)
 	if err != nil {
 		return err
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("insert", string(data), &response)
+	return c.send(messageTypeInsert, string(data), &response)
 }
 
-// InsertRecord inserts a single record
-func (c *Client) InsertRecord(item LTDBInsertMessageRequest) error {
-	return c.InsertMultipleRecords([]LTDBInsertMessageRequest{item})
+// InsertSingleDocumentRecord inserts a single record into a document
+func (c *Client) InsertSingleDocumentRecord(item LTDBInsertMessageRequest) error {
+	return c.InsertMultipleDocumentRecords([]LTDBInsertMessageRequest{item})
 }
 
-// FetchRecords fetches records for a specific user
-func (c *Client) FetchRecords(params LTDBFetchRecordsParams) ([]LTDBRecordResponse, error) {
+// FetchDocument fetches all records for a specific document according to the provided filters
+func (c *Client) FetchDocument(params LTDBFetchRecordsParams) ([]LTDBRecordResponse, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
-	var response LTDBQueryUserResponse
-	err = c.send("query-user", string(data), &response)
+	var response LTDBQueryCollectionResponse
+	err = c.send(messageTypeQueryDocument, string(data), &response)
 	if err != nil {
 		return nil, err
 	}
 	return response.Records, nil
 }
 
-// DeleteRecord deletes a single record
-func (c *Client) DeleteRecord(params LTDBDeleteRecord) error {
+// DeleteDocument deletes an entire document (optionally scoped to a collection)
+func (c *Client) DeleteDocument(params LTDBDeleteDocumentParams) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("delete-record", string(data), &response)
+	return c.send(messageTypeDeleteDocument, string(data), &response)
 }
 
-// DeleteMultipleRecords deletes multiple records
-func (c *Client) DeleteMultipleRecords(params []LTDBDeleteRecord) error {
+// DeleteDocumentRecord deletes a single record within a document
+func (c *Client) DeleteDocumentRecord(params LTDBDeleteRecord) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("delete-multiple-records", string(data), &response)
+	return c.send(messageTypeDeleteRecord, string(data), &response)
 }
 
-// DeleteSession deletes a user session
-func (c *Client) DeleteSession(params LTDBDeleteUserParams) error {
+// DeleteMultipleDocumentRecords deletes multiple records across one or more documents
+func (c *Client) DeleteMultipleDocumentRecords(params []LTDBDeleteRecord) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("delete-user", string(data), &response)
+	return c.send(messageTypeDeleteMultiple, string(data), &response)
 }
 
 // SetValue sets a key-value pair
@@ -391,7 +408,7 @@ func (c *Client) SetValue(params LTDBSetValueParams) error {
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("set-value", string(data), &response)
+	return c.send(messageTypeSetValue, string(data), &response)
 }
 
 // GetValue gets a value by key
@@ -402,7 +419,7 @@ func (c *Client) GetValue(params LTDBGetValueParams) (string, error) {
 	}
 
 	var response LTDBKeyValueResponse
-	err = c.send("get-value", string(data), &response)
+	err = c.send(messageTypeGetValue, string(data), &response)
 	if err != nil {
 		return "", err
 	}
@@ -417,7 +434,7 @@ func (c *Client) GetKeys(params LTDBCollectionParam) ([]string, error) {
 	}
 
 	var response LTDBKeyValueAllKeysResponse
-	err = c.send("get-all-keys", string(data), &response)
+	err = c.send(messageTypeGetAllKeys, string(data), &response)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +449,7 @@ func (c *Client) GetValues(params LTDBCollectionParam) (map[string]string, error
 	}
 
 	var response LTDBKeyValueAllValuesResponse
-	err = c.send("get-all-values", string(data), &response)
+	err = c.send(messageTypeGetAllValues, string(data), &response)
 	if err != nil {
 		return nil, err
 	}
@@ -447,5 +464,5 @@ func (c *Client) DeleteValue(params LTDBDeleteValueParams) error {
 	}
 
 	var response LTDBInsertMessageResponse
-	return c.send("remove-value", string(data), &response)
+	return c.send(messageTypeRemoveValue, string(data), &response)
 }

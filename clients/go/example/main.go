@@ -22,12 +22,12 @@ func main() {
 	now := time.Now().Unix()
 	record := ltdb.LTDBInsertMessageRequest{
 		TS:         now,
-		Key:        "user123",
+		Key:        "collection123",
 		Data:       `{"temperature": 22.5, "humidity": 65.2}`,
 		Collection: "sensors",
 	}
 
-	if err := client.InsertRecord(record); err != nil {
+	if err := client.InsertSingleDocumentRecord(record); err != nil {
 		log.Printf("Failed to insert record: %v", err)
 		return
 	}
@@ -37,19 +37,19 @@ func main() {
 	records := []ltdb.LTDBInsertMessageRequest{
 		{
 			TS:         now + 1,
-			Key:        "user123",
+			Key:        "collection123",
 			Data:       `{"temperature": 22.7, "humidity": 64.8}`,
 			Collection: "sensors",
 		},
 		{
 			TS:         now + 2,
-			Key:        "user123",
+			Key:        "collection123",
 			Data:       `{"temperature": 22.9, "humidity": 64.5}`,
 			Collection: "sensors",
 		},
 	}
 
-	if err := client.InsertMultipleRecords(records); err != nil {
+	if err := client.InsertMultipleDocumentRecords(records); err != nil {
 		log.Printf("Failed to insert multiple records: %v", err)
 		return
 	}
@@ -63,10 +63,10 @@ func main() {
 	}
 	fmt.Printf("✓ Collections: %v\n", collections)
 
-	// Example 4: Fetch records for a user
-	fetchedRecords, err := client.FetchRecords(ltdb.LTDBFetchRecordsParams{
+	// Example 4: Fetch records for a collection
+	fetchedRecords, err := client.FetchDocument(ltdb.LTDBFetchRecordsParams{
 		Collection: "sensors",
-		Key:        "user123",
+		Key:        "collection123",
 		From:       now - 3600, // 1 hour ago
 		To:         now + 100,  // future time to include all records
 	})
@@ -74,7 +74,7 @@ func main() {
 		log.Printf("Failed to fetch records: %v", err)
 		return
 	}
-	fmt.Printf("✓ Fetched %d records for user123\n", len(fetchedRecords))
+	fmt.Printf("✓ Fetched %d records for collection123\n", len(fetchedRecords))
 	for i, rec := range fetchedRecords {
 		fmt.Printf("  Record %d: TS=%d, Data=%s\n", i+1, rec.TS, rec.Data)
 	}
@@ -115,17 +115,18 @@ func main() {
 	fmt.Printf("✓ Keys in config collection: %v\n", keys)
 
 	// Example 6: Fetch sessions
-	sessions, err := client.FetchSessions(ltdb.LTDBFetchSessionsParams{
+	from := now - 3600
+	sessions, err := client.FetchLatestDocumentRecords(ltdb.LTDBFetchLatestRecordsParams{
 		Collection: "sensors",
 		TS:         now,
-		Key:        "user123",
-		From:       now - 3600,
+		Key:        "collection123",
+		From:       &from,
 	})
 	if err != nil {
 		log.Printf("Failed to fetch sessions: %v", err)
 		return
 	}
-	fmt.Printf("✓ Fetched sessions for user123: %d entries\n", len(sessions))
+	fmt.Printf("✓ Fetched sessions for collection123: %d entries\n", len(sessions))
 
 	fmt.Println("\n🎉 All examples completed successfully!")
 }
