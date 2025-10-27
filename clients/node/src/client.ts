@@ -1,6 +1,6 @@
 import {
     LTDBCollectionsResponse,
-    LTDBFetchSessionsParams,
+    LTDBFetchLatestRecordsParams,
     LTDBQueryResponse,
     LTDBDeleteCollectionParams,
     LTDBInsertMessageResponse,
@@ -21,7 +21,7 @@ import {
 const MESSAGE_TYPES = {
     AUTH: "auth",
     INSERT: "ins",
-    QUERY_SESSIONS: "qry",
+    QUERY_RECORDS: "qry",
     QUERY_COLLECTIONS: "cols",
     QUERY_DOCUMENT: "qdoc",
     DELETE_DOCUMENT: "ddoc",
@@ -266,9 +266,9 @@ class LTDBClient {
      * Fetch the latest records for a given collection. If device_id is provided, fetch the latest records for that device_id only
      * if "from" is provided, fetch the records only starting from that timestamp and always up to the "ts" timestamp.
      */
-    public async fetchLatestDocumentRecords(params: LTDBFetchSessionsParams) {
+    public async fetchLatestDocumentRecords(params: LTDBFetchLatestRecordsParams) {
         const resp = await this.send<LTDBQueryResponse>({
-            type: MESSAGE_TYPES.QUERY_SESSIONS,
+            type: MESSAGE_TYPES.QUERY_RECORDS,
             data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "", from: params.from || 0 }),
         });
         return resp.records;

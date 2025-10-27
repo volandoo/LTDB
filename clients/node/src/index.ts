@@ -1,7 +1,7 @@
 import LTDBClient from "./client";
 import {
     LTDBCollectionsResponse,
-    LTDBFetchSessionsParams,
+    LTDBFetchLatestRecordsParams,
     LTDBQueryResponse,
     LTDBDeleteCollectionParams,
     LTDBInsertMessageResponse,
@@ -22,7 +22,7 @@ import {
 export {
     LTDBClient,
     LTDBCollectionsResponse,
-    LTDBFetchSessionsParams,
+    LTDBFetchLatestRecordsParams,
     LTDBQueryResponse,
     LTDBDeleteCollectionParams,
     LTDBInsertMessageResponse,

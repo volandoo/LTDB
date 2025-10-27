@@ -57,7 +57,7 @@ export type LTDBCollectionParam = {
     collection: string;
 };
 
-export type LTDBFetchSessionsParams = {
+export type LTDBFetchLatestRecordsParams = {
     collection: string;
     ts: number;
     key?: string;
