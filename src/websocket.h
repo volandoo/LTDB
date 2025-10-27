@@ -15,6 +15,23 @@
 #include "messagerequest.h"
 #include "collection.h"
 
+namespace MessageType {
+    inline const QString Auth = QStringLiteral("auth");
+    inline const QString Insert = QStringLiteral("ins");
+    inline const QString QuerySessions = QStringLiteral("qry");
+    inline const QString QueryCollections = QStringLiteral("cols");
+    inline const QString QueryDocument = QStringLiteral("qdoc");
+    inline const QString DeleteDocument = QStringLiteral("ddoc");
+    inline const QString DeleteCollection = QStringLiteral("dcol");
+    inline const QString DeleteRecord = QStringLiteral("drec");
+    inline const QString DeleteMultipleRecords = QStringLiteral("dmrec");
+    inline const QString SetValue = QStringLiteral("sval");
+    inline const QString GetValue = QStringLiteral("gval");
+    inline const QString RemoveValue = QStringLiteral("rval");
+    inline const QString GetAllValues = QStringLiteral("gvals");
+    inline const QString GetAllKeys = QStringLiteral("gkeys");
+}
+
 // comment
 class WebSocket : public QObject
 {
@@ -35,10 +52,10 @@ private slots:
 private:
     void handleMessage(QWebSocket* client, const MessageRequest& message);
     
-    QString handleQueryUser(QWebSocket* client, const MessageRequest& message);
+    QString handleQueryDocument(QWebSocket* client, const MessageRequest& message);
     QString handleQuerySessions(QWebSocket* client, const MessageRequest& message);
     QString handleQueryCollections(QWebSocket* client, const MessageRequest& message);
-    QString handleDeleteUser(QWebSocket* client, const MessageRequest& message);
+    QString handleDeleteDocument(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteCollection(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteRecord(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteMultipleRecords(QWebSocket* client, const MessageRequest& message);

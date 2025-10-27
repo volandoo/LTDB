@@ -85,7 +85,7 @@ void Collection::insert(qint64 timestamp, const QString &key, const QString &dat
     }
 }
 
-DataRecord *Collection::getLatestRecordForUser(const QString &key, qint64 timestamp)
+DataRecord *Collection::getLatestRecordForDocument(const QString &key, qint64 timestamp)
 {
     auto it = m_data.find(key);
     if (it == m_data.end())
@@ -102,7 +102,7 @@ DataRecord *Collection::getLatestRecordForUser(const QString &key, qint64 timest
     return it->second[index].get();
 }
 
-DataRecord *Collection::getEarliestRecordForUser(const QString &key, qint64 timestamp)
+DataRecord *Collection::getEarliestRecordForDocument(const QString &key, qint64 timestamp)
 {
     auto it = m_data.find(key);
     if (it == m_data.end())
@@ -182,7 +182,7 @@ QHash<QString, QList<DataRecord *>> Collection::getSessionData(qint64 from, qint
     return result;
 }
 
-QList<DataRecord *> Collection::getAllRecordsForUser(const QString &key, qint64 from, qint64 to, bool reverse, qint64 limit)
+QList<DataRecord *> Collection::getAllRecordsForDocument(const QString &key, qint64 from, qint64 to, bool reverse, qint64 limit)
 {
     QList<DataRecord *> result;
     auto it = m_data.find(key);
@@ -226,7 +226,7 @@ QList<DataRecord *> Collection::getAllRecordsForUser(const QString &key, qint64 
     return result;
 }
 
-void Collection::clearUser(const QString &key)
+void Collection::clearDocument(const QString &key)
 {
     auto it = m_data.find(key);
     if (it != m_data.end())
@@ -246,7 +246,7 @@ void Collection::clearUser(const QString &key)
             }
         }
 
-        qInfo() << "User deleted from memory" << m_name << ":" << key;
+        qInfo() << "Document deleted from memory" << m_name << ":" << key;
     }
 }
 

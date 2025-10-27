@@ -1,12 +1,12 @@
-#include "queryuser.h"
+#include "querydocument.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QDebug>
 
-QueryUser QueryUser::fromJson(const QString& jsonString, bool* ok)
+QueryDocument QueryDocument::fromJson(const QString& jsonString, bool* ok)
 {
-    QueryUser query;
+    QueryDocument query;
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8(), &error);
     
@@ -35,7 +35,7 @@ QueryUser QueryUser::fromJson(const QString& jsonString, bool* ok)
     return query;
 }
 
-bool QueryUser::isValid() const
+bool QueryDocument::isValid() const
 {
     return to > 0 && from <= to && !key.isEmpty() && !collection.isEmpty();
 } 

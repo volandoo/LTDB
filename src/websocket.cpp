@@ -10,8 +10,8 @@
 #include <QUuid>
 #include "insertrequest.h"
 #include "querysessions.h"
-#include "queryuser.h"
-#include "deleteuser.h"
+#include "querydocument.h"
+#include "deletedocument.h"
 #include "deletecollection.h"
 #include "keyvalue.h"
 #include "deleterecord.h"
@@ -102,7 +102,7 @@ void WebSocket::processMessage(const QString &message)
         return;
     }
 
-    if (msg.type == "api-key")
+    if (msg.type == MessageType::Auth)
     {
         bool isAuthenticated = msg.data == m_secretKey;
         m_isAuthenticated[client->objectName()] = isAuthenticated;
@@ -133,55 +133,55 @@ void WebSocket::handleMessage(QWebSocket *client, const MessageRequest &message)
 {
     QString response;
        
-    if (message.type == "insert")
+    if (message.type == MessageType::Insert)
     {
         response = handleInsert(client, message);
     }
-    else if (message.type == "query")
+    else if (message.type == MessageType::QuerySessions)
     {
         response = handleQuerySessions(client, message);
     }
-    else if (message.type == "collections")
+    else if (message.type == MessageType::QueryCollections)
     {
         response = handleQueryCollections(client, message);
     }
-    else if (message.type == "query-user")
+    else if (message.type == MessageType::QueryDocument)
     {
-        response = handleQueryUser(client, message);
+        response = handleQueryDocument(client, message);
     }
-    else if (message.type == "delete-user")
+    else if (message.type == MessageType::DeleteDocument)
     {
-        response = handleDeleteUser(client, message);
+        response = handleDeleteDocument(client, message);
     }
-    else if (message.type == "delete-collection")
+    else if (message.type == MessageType::DeleteCollection)
     {
         response = handleDeleteCollection(client, message);
     }
-    else if (message.type == "delete-record")
+    else if (message.type == MessageType::DeleteRecord)
     {
         response = handleDeleteRecord(client, message);
     }
-    else if (message.type == "delete-multiple-records")
+    else if (message.type == MessageType::DeleteMultipleRecords)
     {
         response = handleDeleteMultipleRecords(client, message);
     }
-    else if (message.type == "set-value")
+    else if (message.type == MessageType::SetValue)
     {
         response = handleSetValue(client, message);
     }
-    else if (message.type == "get-value")
+    else if (message.type == MessageType::GetValue)
     {
         response = handleGetValue(client, message);
     }
-    else if (message.type == "remove-value")
+    else if (message.type == MessageType::RemoveValue)
     {
         response = handleRemoveValue(client, message);
     }
-    else if (message.type == "get-all-values")
+    else if (message.type == MessageType::GetAllValues)
     {
         response = handleGetAllValues(client, message);
     }
-    else if (message.type == "get-all-keys")
+    else if (message.type == MessageType::GetAllKeys)
     {
         response = handleGetAllKeys(client, message);
     }
@@ -281,30 +281,30 @@ QString WebSocket::handleQueryCollections(QWebSocket *client, const MessageReque
 
 }
 
-QString WebSocket::handleQueryUser(QWebSocket *client, const MessageRequest &message)
+QString WebSocket::handleQueryDocument(QWebSocket *client, const MessageRequest &message)
 {
     bool ok;
-    QueryUser queryUser = QueryUser::fromJson(message.data, &ok);
+    QueryDocument queryDocument = QueryDocument::fromJson(message.data, &ok);
     if (!ok)
     {
-        qWarning() << "Invalid query user message format from" << client->peerAddress().toString();
+        qWarning() << "Invalid query document message format from" << client->peerAddress().toString();
         client->close();
         return "";
     }
 
     QJsonObject dataObj;
-    auto database = m_databases[queryUser.collection].get();
+    auto database = m_databases[queryDocument.collection].get();
     QJsonArray recordsArray;
 
     dataObj["id"] = message.id;
     if (database == nullptr)
     {
-        m_databases.erase(queryUser.collection);   
+        m_databases.erase(queryDocument.collection);   
         dataObj["records"] = recordsArray;
         QJsonDocument doc(dataObj);
         return doc.toJson(QJsonDocument::Compact);
     }
-    auto records = database->getAllRecordsForUser(queryUser.key, queryUser.from, queryUser.to, queryUser.reverse, queryUser.limit);
+    auto records = database->getAllRecordsForDocument(queryDocument.key, queryDocument.from, queryDocument.to, queryDocument.reverse, queryDocument.limit);
 
     foreach (const DataRecord *record, records)
     {
@@ -316,13 +316,13 @@ QString WebSocket::handleQueryUser(QWebSocket *client, const MessageRequest &mes
     return doc.toJson(QJsonDocument::Compact);
 }
 
-QString WebSocket::handleDeleteUser(QWebSocket *client, const MessageRequest &message)
+QString WebSocket::handleDeleteDocument(QWebSocket *client, const MessageRequest &message)
 {
     bool ok;
-    DeleteUser query = DeleteUser::fromJson(message.data  , &ok);
+    DeleteDocument query = DeleteDocument::fromJson(message.data  , &ok);
     if (!ok)
     {
-        qWarning() << "Invalid delete user message format from" << client->peerAddress().toString();
+        qWarning() << "Invalid delete document message format from" << client->peerAddress().toString();
         client->close();
         return "";
     }
@@ -332,12 +332,12 @@ QString WebSocket::handleDeleteUser(QWebSocket *client, const MessageRequest &me
 
     if (query.collection.isEmpty())
     {
-        // delete from all collections
+        // Hidden capability: empty collection deletes this document across all collections; SDKs keep this private.
         QVector<QString> toErase;
         
         for (auto &[key, value] : m_databases)
         {
-            value->clearUser(query.key);
+            value->clearDocument(query.key);
             if (value->isEmpty())
             {
                 toErase.append(key);
@@ -347,7 +347,7 @@ QString WebSocket::handleDeleteUser(QWebSocket *client, const MessageRequest &me
         // Now erase the empty collections
         foreach (const QString &key, toErase)
         {            
-            qInfo() << "Deleting collection (1) since there are no more users:" << key;
+            qInfo() << "Deleting collection (1) since there are no more documents:" << key;
             m_databases.erase(key);
         }
     }
@@ -360,11 +360,11 @@ QString WebSocket::handleDeleteUser(QWebSocket *client, const MessageRequest &me
             qWarning() << "Collection not found for collection:" << query.collection;
             return doc.toJson(QJsonDocument::Compact);
         }
-        database->clearUser(query.key);
+        database->clearDocument(query.key);
         
         if (database->isEmpty())
         {
-            qInfo() << "Deleting collection (2) since there are no more users:" << query.collection;
+            qInfo() << "Deleting collection (2) since there are no more documents:" << query.collection;
             m_databases.erase(query.collection);
         }
     }

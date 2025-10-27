@@ -1,12 +1,12 @@
-#include "deleteuser.h"
+#include "deletedocument.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QDebug>
 
-DeleteUser DeleteUser::fromJson(const QString& jsonString, bool* ok)
+DeleteDocument DeleteDocument::fromJson(const QString& jsonString, bool* ok)
 {
-    DeleteUser query;
+    DeleteDocument query;
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(jsonString.toUtf8(), &error);
     
@@ -32,7 +32,7 @@ DeleteUser DeleteUser::fromJson(const QString& jsonString, bool* ok)
     return query;
 }
 
-bool DeleteUser::isValid() const
+bool DeleteDocument::isValid() const
 {
     return !key.isEmpty();
 } 
