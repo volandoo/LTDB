@@ -4,9 +4,8 @@ import {
     LTDBQueryResponse,
     LTDBDeleteCollectionParams,
     LTDBInsertMessageResponse,
-    LTDBQueryUserResponse,
+    LTDBQueryCollectionResponse,
     LTDBDeleteRecord,
-    LTDBDeleteUserParams,
     LTDBSetValueParams,
     LTDBGetValueParams,
     LTDBKeyValueResponse,
@@ -16,7 +15,25 @@ import {
     LTDBDeleteValueParams,
     LTDBInsertMessageRequest,
     LTDBFetchRecordsParams,
+    LTDBDeleteDocumentParams,
 } from "./types";
+
+const MESSAGE_TYPES = {
+    AUTH: "auth",
+    INSERT: "ins",
+    QUERY_SESSIONS: "qry",
+    QUERY_COLLECTIONS: "cols",
+    QUERY_DOCUMENT: "qdoc",
+    DELETE_DOCUMENT: "ddoc",
+    DELETE_COLLECTION: "dcol",
+    DELETE_RECORD: "drec",
+    DELETE_MULTIPLE_RECORDS: "dmrec",
+    SET_VALUE: "sval",
+    GET_VALUE: "gval",
+    REMOVE_VALUE: "rval",
+    GET_ALL_VALUES: "gvals",
+    GET_ALL_KEYS: "gkeys",
+} as const;
 
 type WebSocketResponse = {
     id: string;
@@ -77,7 +94,7 @@ class LTDBClient {
                 this.ws!.send(
                     JSON.stringify({
                         id: messageId,
-                        type: "api-key",
+                        type: MESSAGE_TYPES.AUTH,
                         data: this.apiKey,
                     })
                 );
@@ -196,78 +213,100 @@ class LTDBClient {
         }, this.reconnectInterval);
     }
 
-    // Sessions API
-    // A session is a time series of records for a single key in a collection
-    // For example, where user is a collection and key is a user id:
-    // TS is always in seconds.
-    // {
-    //     "users": [
-    //         "user_1": {
-    //             "ts": 1747604423,
-    //             "data": { "temperature": 22.5 }
-    //         },
-    //         "user_2": {
-    //             "ts": 1747604424,
-    //             "data": { "temperature": 22.6 }
-    //         }
-    //     ]
-    // }
+    /************************************************************
+    Database looks like this:
+    
+    where a collection is temperature, humidity, etc.
+    where a document is an array of records, identified by the device_id
+
+    {
+        "temperature": {
+            "device_id_1": [
+                { "ts": 1747604423, "data": { "temperature": 22.5 }
+                { "ts": 1747604424, "data": { "temperature": 22.6 }
+            ],
+            "device_id_2": [
+                { "ts": 1747604425, "data": { "temperature": 22.7 }
+                { "ts": 1747604426, "data": { "temperature": 22.8 }
+            ],
+            "device_id_3": [
+                { "ts": 1747604427, "data": { "temperature": 22.9 }
+                { "ts": 1747604428, "data": { "temperature": 23.0 }
+            ],
+        },
+        "humidity": {
+            "device_id_1": [
+                { "ts": 1747604423, "data": { "humidity": 45.5 }
+                { "ts": 1747604424, "data": { "humidity": 45.6 }
+            ],
+            "device_id_2": [
+                { "ts": 1747604425, "data": { "humidity": 45.7 }
+                { "ts": 1747604426, "data": { "humidity": 45.8 }
+            ],
+        }
+    }
+    ************************************************************/
+
     public async fetchCollections() {
         const resp = await this.send<LTDBCollectionsResponse>({
-            type: "collections",
+            type: MESSAGE_TYPES.QUERY_COLLECTIONS,
             data: "{}",
         });
         return resp.collections;
     }
 
-    public async fetchSessions(params: LTDBFetchSessionsParams) {
+    public async deleteCollection(params: LTDBDeleteCollectionParams) {
+        await this.send<LTDBInsertMessageResponse>({
+            type: MESSAGE_TYPES.DELETE_COLLECTION,
+            data: JSON.stringify({ collection: params.collection }),
+        });
+    }
+
+    /**
+     * Fetch the latest records for a given collection. If device_id is provided, fetch the latest records for that device_id only
+     * if "from" is provided, fetch the records only starting from that timestamp and always up to the "ts" timestamp.
+     */
+    public async fetchLatestDocumentRecords(params: LTDBFetchSessionsParams) {
         const resp = await this.send<LTDBQueryResponse>({
-            type: "query",
+            type: MESSAGE_TYPES.QUERY_SESSIONS,
             data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "", from: params.from || 0 }),
         });
         return resp.records;
     }
 
-    public async deleteCollection(params: LTDBDeleteCollectionParams) {
-        await this.send<LTDBInsertMessageResponse>({
-            type: "delete-collection",
-            data: JSON.stringify({ collection: params.collection }),
-        });
+    public async insertMultipleDocumentRecords(items: LTDBInsertMessageRequest[]) {
+        return this.send({ data: JSON.stringify(items), type: MESSAGE_TYPES.INSERT });
     }
 
-    public async insertMultipleRecords(items: LTDBInsertMessageRequest[]) {
-        return this.send({ data: JSON.stringify(items), type: "insert" });
+    public async insertSingleDocumentRecord(items: LTDBInsertMessageRequest) {
+        return this.send({ data: JSON.stringify([items]), type: MESSAGE_TYPES.INSERT });
     }
 
-    public async insertRecord(items: LTDBInsertMessageRequest) {
-        return this.send({ data: JSON.stringify([items]), type: "insert" });
-    }
-
-    public async fetchRecords(params: LTDBFetchRecordsParams) {
-        const resp = await this.send<LTDBQueryUserResponse>({
-            type: "query-user",
+    public async fetchDocument(params: LTDBFetchRecordsParams) {
+        const resp = await this.send<LTDBQueryCollectionResponse>({
+            type: MESSAGE_TYPES.QUERY_DOCUMENT,
             data: JSON.stringify(params),
         });
         return resp.records;
     }
 
-    public async deleteRecord(params: LTDBDeleteRecord) {
+    public async deleteDocument(params: LTDBDeleteDocumentParams) {
         await this.send<LTDBInsertMessageResponse>({
-            type: "delete-record",
+            type: MESSAGE_TYPES.DELETE_DOCUMENT,
             data: JSON.stringify(params),
         });
     }
 
-    public async deleteMultipleRecords(params: LTDBDeleteRecord[]) {
+    public async deleteDocumentRecord(params: LTDBDeleteRecord) {
         await this.send<LTDBInsertMessageResponse>({
-            type: "delete-multiple-records",
+            type: MESSAGE_TYPES.DELETE_RECORD,
             data: JSON.stringify(params),
         });
     }
 
-    public async deleteSession(params: LTDBDeleteUserParams) {
+    public async deleteMultipleDocumentRecords(params: LTDBDeleteRecord[]) {
         await this.send<LTDBInsertMessageResponse>({
-            type: "delete-user",
+            type: MESSAGE_TYPES.DELETE_MULTIPLE_RECORDS,
             data: JSON.stringify(params),
         });
     }
@@ -275,14 +314,14 @@ class LTDBClient {
     // Key Value API
     public async setValue(params: LTDBSetValueParams) {
         await this.send<LTDBInsertMessageResponse>({
-            type: "set-value",
+            type: MESSAGE_TYPES.SET_VALUE,
             data: JSON.stringify(params),
         });
     }
 
     public async getValue(params: LTDBGetValueParams) {
         const resp = await this.send<LTDBKeyValueResponse>({
-            type: "get-value",
+            type: MESSAGE_TYPES.GET_VALUE,
             data: JSON.stringify(params),
         });
         return resp.value;
@@ -290,7 +329,7 @@ class LTDBClient {
 
     public async getKeys(params: LTDBCollectionParam) {
         const resp = await this.send<LTDBKeyValueAllKeysResponse>({
-            type: "get-all-keys",
+            type: MESSAGE_TYPES.GET_ALL_KEYS,
             data: JSON.stringify(params),
         });
         return resp.keys;
@@ -298,7 +337,7 @@ class LTDBClient {
 
     public async getValues(params: LTDBCollectionParam) {
         const resp = await this.send<LTDBKeyValueAllValuesResponse>({
-            type: "get-all-values",
+            type: MESSAGE_TYPES.GET_ALL_VALUES,
             data: JSON.stringify(params),
         });
         return resp.values;
@@ -306,7 +345,7 @@ class LTDBClient {
 
     public async deleteValue(params: LTDBDeleteValueParams) {
         await this.send<LTDBInsertMessageResponse>({
-            type: "remove-value",
+            type: MESSAGE_TYPES.REMOVE_VALUE,
             data: JSON.stringify(params),
         });
     }

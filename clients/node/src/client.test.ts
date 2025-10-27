@@ -6,24 +6,24 @@ import LTDBClient from './client';
 const testCollection = 'test_collection';
 
 const createMockData = () => {
-    const users = [
-        'user_1',
-        'user_2',
-        'user_3',
+    const documentIds = [
+        'document_1',
+        'document_2',
+        'document_3',
     ];
     const now = 1747604423;
     const records = [];
-    for (const user of users) {
+    for (const documentId of documentIds) {
         for (let i = 0; i < 1000; i++) {
             const ts = now + i;
             const data = JSON.stringify({ value: i });
-            records.push({ ts, key: user, data, collection: testCollection });
+            records.push({ ts, key: documentId, data, collection: testCollection });
         }
     }
-    records.push({ ts: now - 1, key: 'user_4', data: 'test', collection: testCollection });
+    records.push({ ts: now - 1, key: 'collection_4', data: 'test', collection: testCollection });
 
     return records;
-}
+};
 
 
 beforeAll(() => {
@@ -47,7 +47,7 @@ describe('LTDBClient Integration', () => {
     beforeAll(async () => {
         const records = createMockData();
         await client.deleteCollection({ collection: testCollection });
-        await client.insert(records);
+        await client.insertMultipleDocumentRecords(records);
     }, 10000);
 
     afterAll(async () => {
@@ -55,15 +55,15 @@ describe('LTDBClient Integration', () => {
         await new Promise(resolve => setTimeout(resolve, 1000));
     });
 
-    it('should fetch latest session of all four', async () => {
-        const result = await client.fetchSessions({
+    it('should fetch latest document records of all four', async () => {
+        const result = await client.fetchLatestDocumentRecords({
             collection: testCollection,
             ts: Date.now(),
         });
         const keys = Object.keys(result);
         expect(keys.length).toBe(4);
         for (const key of keys) {
-            if (key === 'user_4') {
+            if (key === 'collection_4') {
                 expect(result[key].ts).toBe(1747604423 - 1);
             } else {
                 expect(result[key].ts).toBe(1747604423 + 999);
@@ -71,8 +71,8 @@ describe('LTDBClient Integration', () => {
         }
     }, 10000);
 
-    it('should fetch latest session of only three', async () => {
-        const result = await client.fetchSessions({
+    it('should fetch latest document records of only three', async () => {
+        const result = await client.fetchLatestDocumentRecords({
             collection: testCollection,
             ts: Date.now(),
             from: 1747604423 + 1,

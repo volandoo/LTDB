@@ -23,7 +23,7 @@ export type LTDBQueryResponse = {
     };
 };
 
-export type LTDBQueryUserResponse = {
+export type LTDBQueryCollectionResponse = {
     id: string;
     records: {
         ts: number;
@@ -50,7 +50,7 @@ export type LTDBKeyValueAllKeysResponse = {
 
 export type LTDBKeyValueAllValuesResponse = {
     id: string;
-    values: { [key: string]: string };
+    values: { [key: string]: string; };
 };
 
 export type LTDBCollectionParam = {
@@ -77,7 +77,7 @@ export type LTDBFetchRecordsParams = {
     reverse?: boolean;
 };
 
-export type LTDBDeleteUserParams = {
+export type LTDBDeleteDocumentParams = {
     key: string;
     collection: string;
 };

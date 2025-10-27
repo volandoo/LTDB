@@ -8,6 +8,7 @@
         "build": "tsc",
         "dev": "nodemon --watch src --exec \"npm run build && node dist/index.js\"",
         "start": "node dist/index.js",
+        "test": "jest",
         "prepare": "npm run build"
     },
     "keywords": [
@@ -16,9 +17,9 @@
         "client",
         "ltdb"
     ],
-  "publishConfig": {
-     "access": "public"
-   },
+    "publishConfig": {
+        "access": "public"
+    },
     "author": "Pedro Enrique",
     "license": "Apache-2.0",
     "repository": {
