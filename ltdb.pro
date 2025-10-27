@@ -9,12 +9,12 @@ SOURCES += \
     src/datarecord.cpp \
     src/main.cpp \
     src/messagerequest.cpp \
-    src/deleteuser.cpp \
+    src/deletecollection.cpp \
     src/querysessions.cpp \
-    src/queryuser.cpp \
+    src/querydocument.cpp \
     src/websocket.cpp \
     src/collection.cpp \
-    src/deletecollection.cpp \
+    src/deletedocument.cpp \
     src/keyvalue.cpp \
     src/deleterecord.cpp \
     src/deletemultiplerecords.cpp
@@ -25,14 +25,13 @@ HEADERS += \
     src/datarecordheader.h \
     src/message.h \
     src/messagerequest.h \
-    src/deleteuser.h \
+    src/deletecollection.h \
     src/querysessions.h \
-    src/queryuser.h \
+    src/querydocument.h \
     src/websocket.h \
     src/collection.h \
-    src/deletecollection.h \ 
+    src/deletedocument.h \
     src/keyvalue.h \
     src/deleterecord.h \
     src/deletemultiplerecords.h \
     src/json/json.hpp
-
