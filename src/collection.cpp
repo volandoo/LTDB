@@ -5,6 +5,9 @@
 #include <QDir>
 #include <QFile>
 #include <QDebug>
+#include <algorithm>
+#include <iterator>
+#include <utility>
 
 #include "json/json.hpp"
 
@@ -231,8 +234,7 @@ void Collection::clearDocument(const QString &key)
     auto it = m_data.find(key);
     if (it != m_data.end())
     {
-        it->second.clear();
-        it->second.shrink_to_fit();
+        std::vector<std::unique_ptr<DataRecord>>{}.swap(it->second);
         m_data.erase(it);
         m_data.rehash(0);
 #ifdef __linux__
@@ -267,8 +269,27 @@ void Collection::deleteRecord(const QString &key, qint64 ts)
     }
     records.erase(vecIt);
     if (records.empty()) {
+        std::vector<std::unique_ptr<DataRecord>>{}.swap(records);
         m_data.erase(it);
+        m_data.rehash(0);
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+        return;
     }    
+
+    const auto capacity = records.capacity();
+    const auto size = records.size();
+    if (capacity > 0 && size * 2 < capacity)
+    {
+        std::vector<std::unique_ptr<DataRecord>> compacted;
+        compacted.reserve(size);
+        std::move(records.begin(), records.end(), std::back_inserter(compacted));
+        records.swap(compacted);
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+    }
 }
 
 int Collection::getLatestRecordIndex(const std::vector<std::unique_ptr<DataRecord>> &records, qint64 timestamp)
