@@ -84,11 +84,10 @@ class FluxionDBClient {
         this.isConnecting = true;
         this.connectionPromise = new Promise<void>((resolve, reject) => {
             try {
-                this.ws = new WebSocket(this.url, {
-                    headers: {
-                        "X-API-Key": this.apiKey,
-                    },
-                });
+                // Append API key as query parameter instead of header
+                // (Qt 6.4 doesn't support reading custom headers from handshake)
+                const urlWithKey = `${this.url}${this.url.includes('?') ? '&' : '?'}api-key=${encodeURIComponent(this.apiKey)}`;
+                this.ws = new WebSocket(urlWithKey);
             } catch (error) {
                 this.isConnecting = false;
                 this.connectionPromise = null;

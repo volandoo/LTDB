@@ -9,7 +9,8 @@
 #include <QTime>
 #include <QElapsedTimer>
 #include <QUuid>
-#include <QWebSocketHandshakeRequest>
+#include <QUrl>
+#include <QUrlQuery>
 #include <QWebSocketProtocol>
 #include "insertrequest.h"
 #include "querysessions.h"
@@ -93,13 +94,17 @@ void WebSocket::onNewConnection()
     }
 
     socket->setObjectName(QUuid::createUuid().toString());
-    const QWebSocketHandshakeRequest handshake = socket->request();
-    const QString apiKey = QString::fromUtf8(handshake.headerValue("x-api-key"));
+    
+    // In Qt 6.4, QWebSocketHandshakeRequest is not available
+    // Extract API key from the request URL query parameters
+    const QUrl requestUrl = socket->requestUrl();
+    const QUrlQuery query(requestUrl);
+    const QString apiKey = query.queryItemValue("api-key");
 
     if (apiKey.isEmpty())
     {
-        qWarning() << QTime::currentTime().toString() << "Missing API key header from" << socket->peerAddress().toString();
-        rejectClient(socket, QStringLiteral("Missing API key header"));
+        qWarning() << QTime::currentTime().toString() << "Missing API key parameter from" << socket->peerAddress().toString();
+        rejectClient(socket, QStringLiteral("Missing API key parameter"));
         return;
     }
 

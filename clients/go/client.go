@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -84,11 +83,14 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
 
-	dialer := websocket.DefaultDialer
-	headers := http.Header{}
-	headers.Set("X-API-Key", c.apiKey)
+	// Append API key as query parameter instead of header
+	// (Qt 6.4 doesn't support reading custom headers from handshake)
+	q := u.Query()
+	q.Set("api-key", c.apiKey)
+	u.RawQuery = q.Encode()
 
-	conn, _, err := dialer.Dial(u.String(), headers)
+	dialer := websocket.DefaultDialer
+	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}

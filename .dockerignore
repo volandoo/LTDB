@@ -1,0 +1,32 @@
+# Exclude data and test files
+tmp_data/
+data/
+
+# Exclude client directories
+clients/
+dashboard/
+
+# Exclude development files
+*.md
+.git
+.gitignore
+.github/
+
+# Exclude deployment files
+deploy/
+
+# Exclude build artifacts
+build/
+*.o
+*.user
+*.pro.user
+*.autosave
+moc_*
+qrc_*
+ui_*
+Makefile
+
+# Exclude Node.js dependencies
+node_modules/
+package-lock.json
+

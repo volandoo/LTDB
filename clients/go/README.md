@@ -117,13 +117,13 @@ func main() {
 -   `AddAPIKey(key string, scope LTDBApiKeyScope) (LTDBManageAPIKeyResponse, error)` - Create a scoped key
 -   `RemoveAPIKey(key string) (LTDBManageAPIKeyResponse, error)` - Revoke a scoped key
 
-> **Note:** Only the master API key (supplied via `X-API-Key` during the handshake) is allowed to add or remove keys. Scoped keys can consume their allotted permissions but cannot manage other credentials.
+> **Note:** Only the master API key (supplied via the `api-key` query parameter during the handshake) is allowed to add or remove keys. Scoped keys can consume their allotted permissions but cannot manage other credentials.
 
 ## Important Notes
 
 -   Timestamps are stored as 64-bit numbers; choose the unit that fits your workload (seconds, milliseconds, counters, etc.).
 -   Pick a consistent unit per collection to keep queries intuitive.
--   The client automatically attaches the `X-API-Key` header and manages connection retries
+-   The client automatically appends the `api-key` query parameter and manages connection retries
 -   All data fields should be JSON-encoded strings when storing complex objects
 
 ## Error Handling

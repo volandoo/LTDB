@@ -5,7 +5,7 @@ FluxionDB is an in-memory time series database exposed over WebSockets. The serv
 ## Highlights
 
 -   Millisecond inserts and queries backed by an in-memory collection store
--   Compact WebSocket protocol with header-based auth and tokenised message types (`ins`, `qry`, …)
+-   Compact WebSocket protocol with query-parameter auth and tokenised message types (`ins`, `qry`, …)
 -   Optional persistence when a data folder is supplied
 -   First-party clients:
     -   Node.js SDK (`clients/node`) published as `@volandoo/fluxiondb-client`
@@ -75,7 +75,7 @@ Set `ingress.enabled=true` and configure `ingress.hosts`/`ingress.tls` to expose
 
 ## WebSocket Protocol Overview
 
-All requests are JSON documents. Clients authenticate during the WebSocket handshake by sending an `X-API-Key` header. Supply the master key for full access, or a scoped key that you created with the `keys` management message. The legacy `auth` message is no longer accepted by the server.
+All requests are JSON documents. Clients authenticate during the WebSocket handshake by providing an `api-key` query parameter in the connection URL (e.g., `ws://localhost:8080?api-key=YOUR_KEY`). Supply the master key for full access, or a scoped key that you created with the `keys` management message. The legacy `auth` message is no longer accepted by the server.
 
 | Type    | Purpose                                  |
 | ------- | ---------------------------------------- |
@@ -102,7 +102,7 @@ The built-in master key always has full access, cannot be removed, and is the on
 -   `read_write` – read and insert/update operations.
 -   `read_write_delete` – full access, including destructive operations.
 
-Both clients handle the JSON marshalling for you, as well as sending the required headers.
+Both clients handle the JSON marshalling for you, as well as appending the API key to the connection URL.
 
 ### Managing API Keys Manually
 
