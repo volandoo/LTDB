@@ -7,7 +7,7 @@ This directory contains packaged Helm charts for FluxionDB.
 Add the repository:
 
 ```bash
-helm repo add fluxiondb https://volandoo.github.io/LTDB
+helm repo add fluxiondb https://volandoo.github.io/FluxionDB
 helm repo update
 ```
 
