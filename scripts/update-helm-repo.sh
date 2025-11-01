@@ -29,7 +29,7 @@ echo -e "${BLUE}📋 Updating Helm repository index...${NC}"
 # Get the GitHub repo URL
 GITHUB_USER=$(git config --get remote.origin.url | sed -n 's/.*github.com[:/]\([^/]*\).*/\1/p')
 GITHUB_REPO=$(git config --get remote.origin.url | sed -n 's/.*github.com[:/][^/]*\/\([^.]*\).*/\1/p')
-CHART_URL="https://${GITHUB_USER}.github.io/${GITHUB_REPO}"
+CHART_URL="https://${GITHUB_USER}.github.io/${GITHUB_REPO}/charts"
 
 # Update the index
 helm repo index "$CHART_REPO_DIR" --url "$CHART_URL"
