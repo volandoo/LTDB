@@ -1,6 +1,11 @@
 apiVersion: v2
 name: fluxiondb
-description: A Helm chart for deploying FluxionDB, an in-memory time series database.
+description: A Helm chart for deploying FluxionDB, a single-pod in-memory time series database with persistent storage.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+keywords:
+    - database
+    - time-series
+    - websocket
+    - stateful

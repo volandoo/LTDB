@@ -1,40 +1,85 @@
-replicaCount: 1
+# IMPORTANT: FluxionDB is a single-pod, stateful service
+# It does NOT support horizontal scaling (multiple replicas)
+# Each database instance must run as a single pod
+# For multi-tenancy, deploy multiple separate instances instead
+replicaCount: 1 # DO NOT CHANGE - FluxionDB does not support horizontal scaling
 
 image:
-  repository: volandoo/fluxiondb
-  tag: latest
-  pullPolicy: IfNotPresent
+    repository: volandoo/fluxiondb
+    tag: latest
+    pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
 serviceAccount:
-  create: false
-  annotations: {}
-  name: ""
+    create: false
+    annotations: {}
+    name: ""
 
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
+podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
 
-securityContext: {}
+securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+        drop:
+            - ALL
 
 service:
-  type: ClusterIP
-  port: 8080
+    type: ClusterIP
+    port: 8080
 
 ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-  hosts:
-    - host: fluxiondb.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+    enabled: false
+    className: "nginx"
+    annotations:
+        cert-manager.io/cluster-issuer: "letsencrypt-prod"
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        # WebSocket support
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    hosts:
+        - host: "" # Set dynamically: {db_id}.fluxiondb.com
+          paths:
+              - path: /
+                pathType: Prefix
+    tls:
+        - secretName: "" # Set dynamically: {db_id}-fluxiondb-tls
+          hosts:
+              - "" # Set dynamically: {db_id}.fluxiondb.com
 
-resources: {}
+resources:
+    requests:
+        memory: "512Mi"
+        cpu: "250m"
+    limits:
+        memory: "512Mi"
+        cpu: "1000m"
+
+# Liveness and readiness probes for health checking
+livenessProbe:
+    enabled: true
+    tcpSocket:
+        port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+readinessProbe:
+    enabled: true
+    tcpSocket:
+        port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
 
 nodeSelector: {}
 
@@ -43,19 +88,37 @@ tolerations: []
 affinity: {}
 
 env:
-  flushInterval: 15
-  dataFolder: /data
+    flushInterval: 15
+    dataFolder: /data
 
 secret:
-  create: true
-  name: ""
-  key: fluxiondb-secret
-  secretKey: "change-me"
+    create: true
+    name: ""
+    key: fluxiondb-secret
+    # IMPORTANT: For multi-tenant deployments, this MUST be overridden per user
+    # DO NOT use the default in production
+    secretKey: ""
 
 persistence:
-  enabled: true
-  existingClaim: ""
-  storageClass: ""
-  accessModes:
-    - ReadWriteOnce
-  size: 10Gi
+    enabled: true
+    existingClaim: ""
+    storageClass: "" # Consider setting a default for your cluster
+    accessModes:
+        - ReadWriteOnce # Required: FluxionDB is single-pod only
+    size: 10Gi
+
+# Network policy for tenant isolation
+networkPolicy:
+    enabled: false
+    policyTypes:
+        - Ingress
+        - Egress
+    ingress: []
+    egress:
+        - to:
+              - namespaceSelector: {}
+          ports:
+              - protocol: TCP
+                port: 53
+              - protocol: UDP
+                port: 53
