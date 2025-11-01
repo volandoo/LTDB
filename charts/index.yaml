@@ -1,20 +1,20 @@
 apiVersion: v1
 entries:
-    fluxiondb:
-        - apiVersion: v2
-          appVersion: 0.1.0
-          created: "2025-11-01T14:26:05.150991+01:00"
-          description: A Helm chart for deploying FluxionDB, a single-pod in-memory time
-              series database with persistent storage.
-          digest: f22621c9b97a98339ff3bea8c526a230ec18bd4da74ba5b5427148fd62c4781d
-          keywords:
-              - database
-              - time-series
-              - websocket
-              - stateful
-          name: fluxiondb
-          type: application
-          urls:
-              - https://volandoo.github.io/FluxionDB/charts/fluxiondb-0.1.0.tgz
-          version: 0.1.0
-generated: "2025-11-01T14:26:05.150119+01:00"
+  fluxiondb:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2025-11-01T14:47:21.134922+01:00"
+    description: A Helm chart for deploying FluxionDB, a single-pod in-memory time
+      series database with persistent storage.
+    digest: 0588f37cf73d1f55dfca022ca5e6531adbbc7e0bc8f17aaf5a4b7eda2155720a
+    keywords:
+    - database
+    - time-series
+    - websocket
+    - stateful
+    name: fluxiondb
+    type: application
+    urls:
+    - https://volandoo.github.io/FluxionDB/charts/fluxiondb-0.1.0.tgz
+    version: 0.1.0
+generated: "2025-11-01T14:47:21.134257+01:00"
