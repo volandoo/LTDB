@@ -20,7 +20,7 @@ COPY . .
 
 # Build the project
 RUN mkdir build && cd build \
-    && qmake6 ../ltdb.pro CONFIG+=release \
+    && qmake6 ../fluxiondb.pro CONFIG+=release \
     && make
 
 
@@ -28,4 +28,4 @@ RUN mkdir build && cd build \
 EXPOSE 8080
 
 # Set the entrypoint
-ENTRYPOINT [ "./build/ltdb" ]
+ENTRYPOINT [ "./build/fluxiondb" ]

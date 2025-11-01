@@ -33,7 +33,7 @@ QList<InsertRequest> InsertRequest::fromJson(const QString& jsonString, bool* ok
     
         QJsonObject obj = value.toObject();
         InsertRequest payload;
-        payload.ts = obj["ts"].toInt();
+        payload.ts = obj["ts"].toVariant().toLongLong();
         payload.key = obj["key"].toString();
         payload.data = obj["data"].toString();
         payload.collection = obj["collection"].toString();

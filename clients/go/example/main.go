@@ -5,12 +5,12 @@ import (
 	"log"
 	"time"
 
-	ltdb "github.com/volandoo/ltdb/clients/go"
+	fluxiondb "github.com/volandoo/fluxiondb/clients/go"
 )
 
 func main() {
 	// Create a new client
-	client := ltdb.NewClient("ws://localhost:8080", "my-secret-key")
+	client := fluxiondb.NewClient("ws://localhost:8080", "my-secret-key")
 
 	// Connect to the server
 	if err := client.Connect(); err != nil {
@@ -20,7 +20,7 @@ func main() {
 
 	// Example 1: Insert a time series record
 	now := time.Now().Unix()
-	record := ltdb.LTDBInsertMessageRequest{
+	record := fluxiondb.LTDBInsertMessageRequest{
 		TS:         now,
 		Key:        "collection123",
 		Data:       `{"temperature": 22.5, "humidity": 65.2}`,
@@ -34,7 +34,7 @@ func main() {
 	fmt.Println("✓ Record inserted successfully")
 
 	// Example 2: Insert multiple records
-	records := []ltdb.LTDBInsertMessageRequest{
+	records := []fluxiondb.LTDBInsertMessageRequest{
 		{
 			TS:         now + 1,
 			Key:        "collection123",
@@ -64,7 +64,7 @@ func main() {
 	fmt.Printf("✓ Collections: %v\n", collections)
 
 	// Example 4: Fetch records for a collection
-	fetchedRecords, err := client.FetchDocument(ltdb.LTDBFetchRecordsParams{
+	fetchedRecords, err := client.FetchDocument(fluxiondb.LTDBFetchRecordsParams{
 		Collection: "sensors",
 		Key:        "collection123",
 		From:       now - 3600, // 1 hour ago
@@ -83,7 +83,7 @@ func main() {
 
 	// Example 5: Key-Value operations
 	// Set a value
-	if err := client.SetValue(ltdb.LTDBSetValueParams{
+	if err := client.SetValue(fluxiondb.LTDBSetValueParams{
 		Collection: "config",
 		Key:        "app_version",
 		Value:      "1.0.0",
@@ -94,7 +94,7 @@ func main() {
 	fmt.Println("✓ Key-value pair set successfully")
 
 	// Get a value
-	value, err := client.GetValue(ltdb.LTDBGetValueParams{
+	value, err := client.GetValue(fluxiondb.LTDBGetValueParams{
 		Collection: "config",
 		Key:        "app_version",
 	})
@@ -105,7 +105,7 @@ func main() {
 	fmt.Printf("✓ Retrieved value: %s\n", value)
 
 	// Get all keys in collection
-	keys, err := client.GetKeys(ltdb.LTDBCollectionParam{
+	keys, err := client.GetKeys(fluxiondb.LTDBCollectionParam{
 		Collection: "config",
 	})
 	if err != nil {
@@ -116,7 +116,7 @@ func main() {
 
 	// Example 6: Fetch sessions
 	from := now - 3600
-	sessions, err := client.FetchLatestDocumentRecords(ltdb.LTDBFetchLatestRecordsParams{
+	sessions, err := client.FetchLatestDocumentRecords(fluxiondb.LTDBFetchLatestRecordsParams{
 		Collection: "sensors",
 		TS:         now,
 		Key:        "collection123",

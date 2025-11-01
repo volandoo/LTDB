@@ -1,7 +1,7 @@
 .PHONY: build run all
 
 # Docker image name
-IMAGE_NAME = volandoo/ltdb
+IMAGE_NAME = volandoo/fluxiondb
 SECRET_KEY = my-secret-key
 	
 # Build the Docker image

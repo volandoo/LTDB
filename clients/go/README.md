@@ -1,11 +1,11 @@
-# LTDB Go Client
+# FluxionDB Go Client
 
-Go client library for LTDB (Live Time Series Database).
+Go client library for FluxionDB (Live Time Series Database).
 
 ## Installation
 
 ```bash
-go get github.com/volandoo/ltdb/clients/go
+go get github.com/volandoo/fluxiondb/clients/go
 ```
 
 ## Usage
@@ -14,34 +14,37 @@ go get github.com/volandoo/ltdb/clients/go
 package main
 
 import (
-    "encoding/json"
     "fmt"
     "log"
     "time"
 
-    ltdb "github.com/volandoo/ltdb/clients/go"
+    fluxiondb "github.com/volandoo/fluxiondb/clients/go"
 )
 
 func main() {
     // Create a new client
-    client := ltdb.NewClient("ws://localhost:8080", "YOUR_SECRET_KEY")
-    
+    client := fluxiondb.NewClient("ws://localhost:8080", "YOUR_SECRET_KEY")
+
     // Connect to the server
     if err := client.Connect(); err != nil {
         log.Fatal("Failed to connect:", err)
     }
     defer client.Close()
 
+    if _, err := client.AddAPIKey("readonly-sdk", fluxiondb.ApiKeyScopeReadOnly); err != nil {
+        log.Printf("Failed to add scoped key: %v", err)
+    }
+
     // Insert a time series record
     now := time.Now().Unix()
-    record := ltdb.LTDBInsertMessageRequest{
+    record := fluxiondb.LTDBInsertMessageRequest{
         TS:         now,
-        Key:        "user123",
+        Key:        "collection123",
         Data:       `{"temperature": 22.5}`,
         Collection: "sensors",
     }
-    
-    if err := client.InsertRecord(record); err != nil {
+
+    if err := client.InsertSingleDocumentRecord(record); err != nil {
         log.Printf("Failed to insert record: %v", err)
         return
     }
@@ -54,10 +57,10 @@ func main() {
     }
     fmt.Printf("Collections: %v\n", collections)
 
-    // Fetch records for a user in a collection
-    records, err := client.FetchRecords(ltdb.LTDBFetchRecordsParams{
+    // Fetch records for a collection in a collection
+    records, err := client.FetchDocument(fluxiondb.LTDBFetchRecordsParams{
         Collection: "sensors",
-        Key:        "user123",
+        Key:        "collection123",
         From:       now - 3600, // 1 hour ago
         To:         now,
     })
@@ -65,8 +68,22 @@ func main() {
         log.Printf("Failed to fetch records: %v", err)
         return
     }
-    
+
     fmt.Printf("Records: %v\n", records)
+
+    // Fetch latest record per document
+    from := now - 3600
+    sessions, err := client.FetchLatestDocumentRecords(fluxiondb.LTDBFetchLatestRecordsParams{
+        Collection: "sensors",
+        TS:         now,
+        Key:        "collection123",
+        From:       &from,
+    })
+    if err != nil {
+        log.Printf("Failed to fetch latest records: %v", err)
+        return
+    }
+    fmt.Printf("Latest records: %v\n", sessions)
 }
 ```
 
@@ -74,33 +91,40 @@ func main() {
 
 ### Time Series Methods
 
-- `InsertRecord(record LTDBInsertMessageRequest) error` - Insert a single record
-- `InsertMultipleRecords(records []LTDBInsertMessageRequest) error` - Insert multiple records
-- `FetchRecords(params LTDBFetchRecordsParams) ([]LTDBRecordResponse, error)` - Fetch records for a specific key
-- `FetchSessions(params LTDBFetchSessionsParams) (map[string]LTDBRecordResponse, error)` - Fetch sessions
-- `DeleteRecord(params LTDBDeleteRecord) error` - Delete a single record
-- `DeleteMultipleRecords(params []LTDBDeleteRecord) error` - Delete multiple records
-- `DeleteSession(params LTDBDeleteUserParams) error` - Delete all records for a user
+-   `InsertSingleDocumentRecord(record LTDBInsertMessageRequest) error` - Insert a single record into a document
+-   `InsertMultipleDocumentRecords(records []LTDBInsertMessageRequest) error` - Insert multiple records into a document
+-   `FetchDocument(params LTDBFetchRecordsParams) ([]LTDBRecordResponse, error)` - Fetch records for a specific document
+-   `FetchLatestDocumentRecords(params LTDBFetchLatestRecordsParams) (map[string]LTDBRecordResponse, error)` - Fetch the latest record per document in a collection
+-   `DeleteDocument(params LTDBDeleteDocumentParams) error` - Delete a document (optionally across collections)
+-   `DeleteDocumentRecord(params LTDBDeleteRecord) error` - Delete a single record within a document
+-   `DeleteMultipleDocumentRecords(params []LTDBDeleteRecord) error` - Delete multiple records within documents
 
 ### Collection Methods
 
-- `FetchCollections() ([]string, error)` - Get all collections
-- `DeleteCollection(params LTDBDeleteCollectionParams) error` - Delete a collection
+-   `FetchCollections() ([]string, error)` - Get all collections
+-   `DeleteCollection(params LTDBDeleteCollectionParams) error` - Delete a collection
 
 ### Key-Value Methods
 
-- `SetValue(params LTDBSetValueParams) error` - Set a key-value pair
-- `GetValue(params LTDBGetValueParams) (string, error)` - Get a value by key
-- `GetKeys(params LTDBCollectionParam) ([]string, error)` - Get all keys in a collection
-- `GetValues(params LTDBCollectionParam) (map[string]string, error)` - Get all key-value pairs in a collection
-- `DeleteValue(params LTDBDeleteValueParams) error` - Delete a key-value pair
+-   `SetValue(params LTDBSetValueParams) error` - Set a key-value pair
+-   `GetValue(params LTDBGetValueParams) (string, error)` - Get a value by key
+-   `GetKeys(params LTDBCollectionParam) ([]string, error)` - Get all keys in a collection
+-   `GetValues(params LTDBCollectionParam) (map[string]string, error)` - Get all key-value pairs in a collection
+-   `DeleteValue(params LTDBDeleteValueParams) error` - Delete a key-value pair
+
+### API Key Management
+
+-   `AddAPIKey(key string, scope LTDBApiKeyScope) (LTDBManageAPIKeyResponse, error)` - Create a scoped key
+-   `RemoveAPIKey(key string) (LTDBManageAPIKeyResponse, error)` - Revoke a scoped key
+
+> **Note:** Only the master API key (supplied via `X-API-Key` during the handshake) is allowed to add or remove keys. Scoped keys can consume their allotted permissions but cannot manage other credentials.
 
 ## Important Notes
 
-- Timestamps must always be in seconds (Unix timestamp)
-- Use `time.Now().Unix()` to get the current time in seconds
-- The client automatically handles WebSocket connection, reconnection, and authentication
-- All data fields should be JSON-encoded strings when storing complex objects
+-   Timestamps are stored as 64-bit numbers; choose the unit that fits your workload (seconds, milliseconds, counters, etc.).
+-   Pick a consistent unit per collection to keep queries intuitive.
+-   The client automatically attaches the `X-API-Key` header and manages connection retries
+-   All data fields should be JSON-encoded strings when storing complex objects
 
 ## Error Handling
 

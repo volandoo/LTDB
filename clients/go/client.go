@@ -1,4 +1,4 @@
-package ltdb
+package fluxiondb
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 )
 
 const (
-	messageTypeAuth             = "auth"
 	messageTypeInsert           = "ins"
 	messageTypeQueryRecords     = "qry"
 	messageTypeQueryCollections = "cols"
@@ -29,6 +29,7 @@ const (
 	messageTypeRemoveValue      = "rval"
 	messageTypeGetAllValues     = "gvals"
 	messageTypeGetAllKeys       = "gkeys"
+	messageTypeManageKeys       = "keys"
 )
 
 // Client represents an LTDB WebSocket client
@@ -46,7 +47,6 @@ type Client struct {
 	connectionMutex      sync.Mutex
 	ctx                  context.Context
 	cancel               context.CancelFunc
-	connected            chan struct{}
 }
 
 // NewClient creates a new LTDB client
@@ -60,7 +60,6 @@ func NewClient(wsURL, apiKey string) *Client {
 		reconnectInterval:    5 * time.Second,
 		ctx:                  ctx,
 		cancel:               cancel,
-		connected:            make(chan struct{}),
 	}
 }
 
@@ -86,7 +85,10 @@ func (c *Client) Connect() error {
 	}
 
 	dialer := websocket.DefaultDialer
-	conn, _, err := dialer.Dial(u.String(), nil)
+	headers := http.Header{}
+	headers.Set("X-API-Key", c.apiKey)
+
+	conn, _, err := dialer.Dial(u.String(), headers)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
@@ -97,38 +99,8 @@ func (c *Client) Connect() error {
 
 	go c.readMessages()
 
-	// Authenticate with API key
-	messageID := c.generateID()
-	authChan := make(chan json.RawMessage, 1)
-
-	c.inflightMutex.Lock()
-	c.inflightRequests[messageID] = authChan
-	c.inflightMutex.Unlock()
-
-	authMsg := WebSocketMessage{
-		ID:   messageID,
-		Type: messageTypeAuth,
-		Data: c.apiKey,
-	}
-
-	if err := c.conn.WriteJSON(authMsg); err != nil {
-		c.cleanupConnection()
-		return fmt.Errorf("failed to send auth message: %w", err)
-	}
-
-	// Wait for auth response
-	select {
-	case <-authChan:
-		close(c.connected)
-		log.Println("WebSocket connected and authenticated")
-		return nil
-	case <-time.After(10 * time.Second):
-		c.cleanupConnection()
-		return errors.New("authentication timeout")
-	case <-c.ctx.Done():
-		c.cleanupConnection()
-		return c.ctx.Err()
-	}
+	log.Println("WebSocket connected")
+	return nil
 }
 
 // readMessages handles incoming WebSocket messages
@@ -465,4 +437,39 @@ func (c *Client) DeleteValue(params LTDBDeleteValueParams) error {
 
 	var response LTDBInsertMessageResponse
 	return c.send(messageTypeRemoveValue, string(data), &response)
+}
+
+// AddAPIKey registers a new API key with the specified scope
+func (c *Client) AddAPIKey(key string, scope LTDBApiKeyScope) (LTDBManageAPIKeyResponse, error) {
+	payload := LTDBManageAPIKeyParams{
+		Action: "add",
+		Key:    key,
+		Scope:  scope,
+	}
+
+	return c.manageAPIKey(payload)
+}
+
+// RemoveAPIKey deletes a previously created API key
+func (c *Client) RemoveAPIKey(key string) (LTDBManageAPIKeyResponse, error) {
+	payload := LTDBManageAPIKeyParams{
+		Action: "remove",
+		Key:    key,
+	}
+
+	return c.manageAPIKey(payload)
+}
+
+func (c *Client) manageAPIKey(params LTDBManageAPIKeyParams) (LTDBManageAPIKeyResponse, error) {
+	data, err := json.Marshal(params)
+	if err != nil {
+		return LTDBManageAPIKeyResponse{}, err
+	}
+
+	var response LTDBManageAPIKeyResponse
+	if err := c.send(messageTypeManageKeys, string(data), &response); err != nil {
+		return LTDBManageAPIKeyResponse{}, err
+	}
+
+	return response, nil
 }

@@ -30,15 +30,29 @@ namespace MessageType {
     inline const QString RemoveValue = QStringLiteral("rval");
     inline const QString GetAllValues = QStringLiteral("gvals");
     inline const QString GetAllKeys = QStringLiteral("gkeys");
+    inline const QString ManageApiKey = QStringLiteral("keys");
 }
 
 // comment
 class WebSocket : public QObject
 {
     Q_OBJECT
-
 public:
-    explicit WebSocket(const QString& secretKey, const QString& dataFolder, int flushIntervalSeconds = 15, QObject *parent = nullptr);
+    enum class ApiKeyScope {
+        ReadOnly,
+        ReadWrite,
+        ReadWriteDelete
+    };
+
+    enum class RequiredPermission {
+        None,
+        Read,
+        Write,
+        Delete,
+        ManageKeys
+    };
+
+    explicit WebSocket(const QString& masterKey, const QString& dataFolder, int flushIntervalSeconds = 15, QObject *parent = nullptr);
     ~WebSocket();
 
     void start(quint16 port = 8080);
@@ -67,18 +81,36 @@ private:
     QString handleRemoveValue(QWebSocket* client, const MessageRequest& message);
     QString handleGetAllValues(QWebSocket* client, const MessageRequest& message);
     QString handleGetAllKeys(QWebSocket* client, const MessageRequest& message);
-    
+    QString handleManageApiKey(QWebSocket* client, const MessageRequest& message);
+
+    bool hasPermission(ApiKeyScope scope, RequiredPermission required) const;
+    RequiredPermission permissionForType(const QString& type) const;
+    bool registerApiKey(const QString& key, ApiKeyScope scope, bool deletable, QString* errorMessage = nullptr);
+    bool removeApiKey(const QString& key, QString* errorMessage = nullptr);
+    bool parseScope(const QString& scopeString, ApiKeyScope* scopeOut) const;
+    QString scopeToString(ApiKeyScope scope) const;
+
+    struct ApiKeyEntry {
+        ApiKeyScope scope;
+        bool deletable;
+    };
+
+    ApiKeyEntry* lookupApiKey(const QString& key);
+
+    void rejectClient(QWebSocket* socket, const QString& reason);
 
     QWebSocketServer *m_server;
     QList<QWebSocket *> m_clients;
     
     // Configuration
-    QString m_secretKey;
+    QString m_masterKey;
     QString m_dataFolder;
 
     // In-memory databases
     std::unordered_map<QString, std::unique_ptr<Collection>> m_databases;
-    std::unordered_map<QString, bool> m_isAuthenticated;
+    std::unordered_map<QString, ApiKeyScope> m_clientScopes;
+    std::unordered_map<QString, ApiKeyEntry> m_apiKeys;
+    std::unordered_map<QString, QString> m_clientKeys;
 
     // flush timer
     QTimer m_flushTimer;

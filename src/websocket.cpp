@@ -4,10 +4,13 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QDir>
 #include <QTime>
 #include <QElapsedTimer>
 #include <QUuid>
+#include <QWebSocketHandshakeRequest>
+#include <QWebSocketProtocol>
 #include "insertrequest.h"
 #include "querysessions.h"
 #include "querydocument.h"
@@ -18,11 +21,16 @@
 #include "deletemultiplerecords.h"
 
 
-WebSocket::WebSocket(const QString &secretKey, const QString &dataFolder, int flushIntervalSeconds, QObject *parent) : QObject(parent)
+WebSocket::WebSocket(const QString &masterKey, const QString &dataFolder, int flushIntervalSeconds, QObject *parent) : QObject(parent)
 {
-    m_secretKey = secretKey;
+    m_masterKey = masterKey;
     m_dataFolder = dataFolder;
     m_server = new QWebSocketServer(QStringLiteral("WebSocket Server"), QWebSocketServer::NonSecureMode, this);
+
+    QString errorMessage;
+    if (!registerApiKey(m_masterKey, ApiKeyScope::ReadWriteDelete, false, &errorMessage)) {
+        qWarning() << "Failed to register master API key:" << errorMessage;
+    }
     
     if (m_dataFolder.isEmpty()) {
         qInfo() << "Running in non-persistent mode (no data folder specified)";
@@ -79,8 +87,35 @@ void WebSocket::start(quint16 port)
 void WebSocket::onNewConnection()
 {
     QWebSocket *socket = m_server->nextPendingConnection();
+    if (!socket)
+    {
+        return;
+    }
+
     socket->setObjectName(QUuid::createUuid().toString());
-    qInfo() << QTime::currentTime().toString() << "New client connected:" << socket->peerAddress().toString() << "ID" << socket->objectName();
+    const QWebSocketHandshakeRequest handshake = socket->request();
+    const QString apiKey = QString::fromUtf8(handshake.headerValue("x-api-key"));
+
+    if (apiKey.isEmpty())
+    {
+        qWarning() << QTime::currentTime().toString() << "Missing API key header from" << socket->peerAddress().toString();
+        rejectClient(socket, QStringLiteral("Missing API key header"));
+        return;
+    }
+
+    ApiKeyEntry *entry = lookupApiKey(apiKey);
+    if (entry == nullptr)
+    {
+        qWarning() << QTime::currentTime().toString() << "Unknown API key from" << socket->peerAddress().toString();
+        rejectClient(socket, QStringLiteral("Unknown API key"));
+        return;
+    }
+
+    m_clientScopes[socket->objectName()] = entry->scope;
+    m_clientKeys[socket->objectName()] = apiKey;
+
+    qInfo() << QTime::currentTime().toString() << "New client connected:" << socket->peerAddress().toString()
+            << "ID" << socket->objectName() << "Scope" << scopeToString(entry->scope);
     connect(socket, &QWebSocket::textMessageReceived, this, &WebSocket::processMessage);
     connect(socket, &QWebSocket::disconnected, this, &WebSocket::socketDisconnected);
     m_clients << socket;
@@ -104,25 +139,30 @@ void WebSocket::processMessage(const QString &message)
 
     if (msg.type == MessageType::Auth)
     {
-        bool isAuthenticated = msg.data == m_secretKey;
-        m_isAuthenticated[client->objectName()] = isAuthenticated;
-        if (!isAuthenticated)
-        {
-            qWarning() << QTime::currentTime().toString() << "Unauthenticated client:" << client->peerAddress().toString();
-            client->close();
-            return;
-        }
         QJsonObject obj;
         obj["id"] = msg.id;
-        QJsonDocument doc(obj);
-        client->sendTextMessage(doc.toJson(QJsonDocument::Compact));
+        obj["error"] = "auth messages are not supported; use the x-api-key header";
+        client->sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
         return;
     }
 
-    if (!m_isAuthenticated[client->objectName()])
+    auto scopeIt = m_clientScopes.find(client->objectName());
+    if (scopeIt == m_clientScopes.end())
     {
-        qWarning() << QTime::currentTime().toString() << "Unauthenticated client:" << client->peerAddress().toString();
-        client->close();
+        qWarning() << QTime::currentTime().toString() << "Client with no registered scope:" << client->peerAddress().toString();
+        rejectClient(client, QStringLiteral("Authentication required"));
+        return;
+    }
+
+    RequiredPermission requiredPermission = permissionForType(msg.type);
+    if (!hasPermission(scopeIt->second, requiredPermission))
+    {
+        qWarning() << QTime::currentTime().toString() << "Permission denied for client" << client->peerAddress().toString()
+                   << "ID" << client->objectName() << "Type" << msg.type;
+        QJsonObject obj;
+        obj["id"] = msg.id;
+        obj["error"] = "permission denied";
+        client->sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
         return;
     }
 
@@ -184,6 +224,10 @@ void WebSocket::handleMessage(QWebSocket *client, const MessageRequest &message)
     else if (message.type == MessageType::GetAllKeys)
     {
         response = handleGetAllKeys(client, message);
+    }
+    else if (message.type == MessageType::ManageApiKey)
+    {
+        response = handleManageApiKey(client, message);
     }
     else
     {
@@ -585,6 +629,298 @@ QString WebSocket::handleGetAllKeys(QWebSocket *client, const MessageRequest &me
     return doc.toJson(QJsonDocument::Compact);
 }
 
+QString WebSocket::handleManageApiKey(QWebSocket *client, const MessageRequest &message)
+{
+    auto clientKeyIt = m_clientKeys.find(client->objectName());
+    if (clientKeyIt == m_clientKeys.end() || clientKeyIt->second != m_masterKey)
+    {
+        QJsonObject response;
+        response["id"] = message.id;
+        response["error"] = "only the master key may manage API keys";
+        QJsonDocument responseDoc(response);
+        return responseDoc.toJson(QJsonDocument::Compact);
+    }
+
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(message.data.toUtf8(), &error);
+    if (error.error != QJsonParseError::NoError || !doc.isObject())
+    {
+        qWarning() << "Invalid manage api key message format from" << client->peerAddress().toString();
+        rejectClient(client, QStringLiteral("Invalid manage api key message"));
+        return "";
+    }
+
+    QJsonObject payload = doc.object();
+    QString action = payload.value("action").toString().trimmed().toLower();
+
+    QJsonObject response;
+    response["id"] = message.id;
+
+    if (action == "add")
+    {
+        const QString key = payload.value("key").toString();
+        const QString scopeString = payload.value("scope").toString();
+        ApiKeyScope scopeValue;
+        if (!parseScope(scopeString, &scopeValue))
+        {
+            response["error"] = "invalid scope";
+        }
+        else
+        {
+            QString errorMessage;
+            if (registerApiKey(key, scopeValue, true, &errorMessage))
+            {
+                response["status"] = "ok";
+                response["scope"] = scopeToString(scopeValue);
+            }
+            else
+            {
+                response["error"] = errorMessage;
+            }
+        }
+    }
+    else if (action == "remove")
+    {
+        const QString key = payload.value("key").toString();
+        QString errorMessage;
+        if (removeApiKey(key, &errorMessage))
+        {
+            response["status"] = "ok";
+        }
+        else
+        {
+            response["error"] = errorMessage;
+        }
+    }
+    else
+    {
+        response["error"] = "unknown action";
+    }
+
+    QJsonDocument responseDoc(response);
+    return responseDoc.toJson(QJsonDocument::Compact);
+}
+
+bool WebSocket::hasPermission(ApiKeyScope scope, RequiredPermission required) const
+{
+    if (required == RequiredPermission::None)
+    {
+        return true;
+    }
+
+    switch (scope)
+    {
+    case ApiKeyScope::ReadOnly:
+        return required == RequiredPermission::Read;
+    case ApiKeyScope::ReadWrite:
+        return required == RequiredPermission::Read || required == RequiredPermission::Write;
+    case ApiKeyScope::ReadWriteDelete:
+        return true;
+    }
+
+    return false;
+}
+
+WebSocket::RequiredPermission WebSocket::permissionForType(const QString &type) const
+{
+    if (type == MessageType::Insert || type == MessageType::SetValue)
+    {
+        return RequiredPermission::Write;
+    }
+    if (type == MessageType::QuerySessions || type == MessageType::QueryCollections ||
+        type == MessageType::QueryDocument || type == MessageType::GetValue ||
+        type == MessageType::GetAllValues || type == MessageType::GetAllKeys)
+    {
+        return RequiredPermission::Read;
+    }
+    if (type == MessageType::DeleteDocument || type == MessageType::DeleteCollection ||
+        type == MessageType::DeleteRecord || type == MessageType::DeleteMultipleRecords ||
+        type == MessageType::RemoveValue)
+    {
+        return RequiredPermission::Delete;
+    }
+    if (type == MessageType::ManageApiKey)
+    {
+        return RequiredPermission::ManageKeys;
+    }
+    return RequiredPermission::None;
+}
+
+bool WebSocket::registerApiKey(const QString &key, ApiKeyScope scope, bool deletable, QString *errorMessage)
+{
+    if (key.isEmpty())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = "api key cannot be empty";
+        }
+        return false;
+    }
+
+    ApiKeyScope scopeToStore = scope;
+    bool deletableToStore = deletable;
+    if (key == m_masterKey)
+    {
+        scopeToStore = ApiKeyScope::ReadWriteDelete;
+        deletableToStore = false;
+    }
+
+    auto it = m_apiKeys.find(key);
+    if (it == m_apiKeys.end())
+    {
+        m_apiKeys.emplace(key, ApiKeyEntry{scopeToStore, deletableToStore});
+    }
+    else
+    {
+        it->second.scope = scopeToStore;
+        if (!it->second.deletable)
+        {
+            it->second.deletable = false;
+        }
+        else
+        {
+            it->second.deletable = deletableToStore;
+        }
+    }
+
+    const QList<QWebSocket *> currentClients = m_clients;
+    for (QWebSocket *clientSocket : currentClients)
+    {
+        if (!clientSocket)
+        {
+            continue;
+        }
+        auto clientKeyIt = m_clientKeys.find(clientSocket->objectName());
+        if (clientKeyIt != m_clientKeys.end() && clientKeyIt->second == key)
+        {
+            m_clientScopes[clientSocket->objectName()] = scopeToStore;
+        }
+    }
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return true;
+}
+
+bool WebSocket::removeApiKey(const QString &key, QString *errorMessage)
+{
+    auto it = m_apiKeys.find(key);
+    if (it == m_apiKeys.end())
+    {
+        if (errorMessage)
+        {
+            *errorMessage = "api key not found";
+        }
+        return false;
+    }
+
+    if (!it->second.deletable)
+    {
+        if (errorMessage)
+        {
+            *errorMessage = "api key cannot be removed";
+        }
+        return false;
+    }
+
+    m_apiKeys.erase(it);
+
+    const QList<QWebSocket *> currentClients = m_clients;
+    for (QWebSocket *clientSocket : currentClients)
+    {
+        if (!clientSocket)
+        {
+            continue;
+        }
+
+        auto clientKeyIt = m_clientKeys.find(clientSocket->objectName());
+        if (clientKeyIt != m_clientKeys.end() && clientKeyIt->second == key)
+        {
+            rejectClient(clientSocket, QStringLiteral("API key revoked"));
+        }
+    }
+
+    if (errorMessage)
+    {
+        errorMessage->clear();
+    }
+    return true;
+}
+
+bool WebSocket::parseScope(const QString &scopeString, ApiKeyScope *scopeOut) const
+{
+    if (scopeOut == nullptr)
+    {
+        return false;
+    }
+
+    QString normalized = scopeString;
+    normalized = normalized.trimmed().toLower();
+    normalized.remove(' ');
+    normalized.remove(',');
+    normalized.remove('-');
+    normalized.remove('_');
+
+    if (normalized == "readonly")
+    {
+        *scopeOut = ApiKeyScope::ReadOnly;
+        return true;
+    }
+    if (normalized == "readwrite")
+    {
+        *scopeOut = ApiKeyScope::ReadWrite;
+        return true;
+    }
+    if (normalized == "readwritedelete")
+    {
+        *scopeOut = ApiKeyScope::ReadWriteDelete;
+        return true;
+    }
+    return false;
+}
+
+QString WebSocket::scopeToString(ApiKeyScope scope) const
+{
+    switch (scope)
+    {
+    case ApiKeyScope::ReadOnly:
+        return QStringLiteral("readonly");
+    case ApiKeyScope::ReadWrite:
+        return QStringLiteral("read_write");
+    case ApiKeyScope::ReadWriteDelete:
+        return QStringLiteral("read_write_delete");
+    }
+    return QStringLiteral("unknown");
+}
+
+WebSocket::ApiKeyEntry *WebSocket::lookupApiKey(const QString &key)
+{
+    auto it = m_apiKeys.find(key);
+    if (it == m_apiKeys.end())
+    {
+        return nullptr;
+    }
+    return &it->second;
+}
+
+void WebSocket::rejectClient(QWebSocket *socket, const QString &reason)
+{
+    if (!socket)
+    {
+        return;
+    }
+
+    qWarning() << QTime::currentTime().toString() << "Closing client"
+               << socket->peerAddress().toString() << "ID" << socket->objectName() << ":" << reason;
+
+    m_clientScopes.erase(socket->objectName());
+    m_clientKeys.erase(socket->objectName());
+    m_clients.removeAll(socket);
+    socket->close(QWebSocketProtocol::CloseCodePolicyViolated, reason.left(120));
+    socket->deleteLater();
+}
+
 void WebSocket::socketDisconnected()
 {
     QWebSocket *client = qobject_cast<QWebSocket *>(sender());
@@ -592,7 +928,8 @@ void WebSocket::socketDisconnected()
     {
         qInfo() << QTime::currentTime().toString() << "Client disconnected:" 
                  << client->peerAddress().toString() << "ID" << client->objectName();
-        m_isAuthenticated.erase(client->objectName());
+        m_clientScopes.erase(client->objectName());
+        m_clientKeys.erase(client->objectName());
         m_clients.removeAll(client);
         client->deleteLater();
     }

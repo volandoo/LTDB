@@ -36,5 +36,5 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            volandoo/ltdb:${{ steps.vars.outputs.sha }}
-            volandoo/ltdb:latest 
+            volandoo/fluxiondb:${{ steps.vars.outputs.sha }}
+            volandoo/fluxiondb:latest

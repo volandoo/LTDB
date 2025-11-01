@@ -1,4 +1,4 @@
-package ltdb
+package fluxiondb
 
 // LTDBInsertMessageRequest represents a request to insert a message
 type LTDBInsertMessageRequest struct {
@@ -8,9 +8,31 @@ type LTDBInsertMessageRequest struct {
 	Collection string `json:"collection"`
 }
 
-// LTDBAPIKeyRequest represents an API key request
-type LTDBAPIKeyRequest struct {
-	Data string `json:"data"`
+// LTDBApiKeyScope enumerates supported API key scopes
+type LTDBApiKeyScope string
+
+const (
+	// ApiKeyScopeReadOnly allows read-only operations
+	ApiKeyScopeReadOnly LTDBApiKeyScope = "readonly"
+	// ApiKeyScopeReadWrite allows read and write operations
+	ApiKeyScopeReadWrite LTDBApiKeyScope = "read_write"
+	// ApiKeyScopeReadWriteDelete grants full access
+	ApiKeyScopeReadWriteDelete LTDBApiKeyScope = "read_write_delete"
+)
+
+// LTDBManageAPIKeyParams represents a manage-API-key request payload
+type LTDBManageAPIKeyParams struct {
+	Action string          `json:"action"`
+	Key    string          `json:"key"`
+	Scope  LTDBApiKeyScope `json:"scope,omitempty"`
+}
+
+// LTDBManageAPIKeyResponse represents the response for API key management
+type LTDBManageAPIKeyResponse struct {
+	ID     string `json:"id"`
+	Status string `json:"status,omitempty"`
+	Error  string `json:"error,omitempty"`
+	Scope  string `json:"scope,omitempty"`
 }
 
 // LTDBInsertMessageResponse represents the response to an insert message

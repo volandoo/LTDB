@@ -2,8 +2,8 @@
 
 // test the client
 
-import LTDBClient from './client';
-const testCollection = 'test_collection';
+import FluxionDBClient from './client';
+const testCollection = 'test_collection_2';
 
 const createMockData = () => {
     const documentIds = [
@@ -38,11 +38,11 @@ afterAll(() => {
     // (console.error as jest.Mock).mockRestore();
 });
 
-describe('LTDBClient Integration', () => {
+describe('FluxionDBClient Integration', () => {
     const url = 'ws://localhost:8080';
     const apiKey = 'my-secret-key';
 
-    const client = new LTDBClient({ url, apiKey });
+    const client = new FluxionDBClient({ url, apiKey });
 
     beforeAll(async () => {
         const records = createMockData();
@@ -83,5 +83,15 @@ describe('LTDBClient Integration', () => {
             expect(result[key].ts).toBe(1747604423 + 999);
         }
     }, 10000);
-});
 
+    it('should manage scoped API keys', async () => {
+        const managedKey = `sdk-readonly-${Date.now()}`;
+        const addResponse = await client.addApiKey({ key: managedKey, scope: "readonly" });
+        expect(addResponse.error ?? "").toBe("");
+        expect(addResponse.status).toBe("ok");
+
+        const removeResponse = await client.removeApiKey({ key: managedKey });
+        expect(removeResponse.error ?? "").toBe("");
+        expect(removeResponse.status).toBe("ok");
+    }, 10000);
+});

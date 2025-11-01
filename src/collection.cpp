@@ -396,7 +396,7 @@ void Collection::flushToDisk()
     }
     
     qDebug() << "Flushing collection to disk" << m_name;
-    // ltdb data
+    // fluxiondb data
     QDir dir;
     dir.mkpath(m_dataFolder + "/" + m_name);
     for(auto & each : m_data) {

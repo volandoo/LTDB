@@ -1,95 +1,237 @@
-# LTDB
+# FluxionDB
 
-LTDB is a custom-built, high-performance in-memory time series database designed to run as a server. It is optimized for speed and efficiency, making it ideal for scenarios where fast time series data ingestion and retrieval are critical. LTDB exposes a WebSocket API for client interaction and can be easily deployed using Docker.
+FluxionDB is an in-memory time series database exposed over WebSockets. The server keeps hot data in RAM, can optionally persist to disk, and speaks a compact protocol that is shared by the official Node.js and Go client SDKs shipped in this repository.
 
-## Features
+## Highlights
 
-- In-memory time series storage for ultra-fast reads and writes
-- WebSocket API for real-time data interaction
-- Optional persistent storage
-- Simple deployment with Docker
-- Official Node.js client library
-
----
-
-## Quick Start
-
-### Run with Docker
-
-You can run LTDB using Docker in two ways:
-
-#### 1. Pull the pre-built image
-
-```sh
-docker pull volandoo/ltdb:latest
-docker run --init --rm -it -p 8080:8080 -v $(pwd)/tmp_data:/app/data volandoo/ltdb:latest --secret-key=YOUR_SECRET_KEY --data=/app/data
-```
-
-#### 2. Build the image locally
-
-```sh
-docker build -t lttdb .
-docker run --init --rm -it -p 8080:8080 -v $(pwd)/tmp_data:/app/data lttdb --secret-key=YOUR_SECRET_KEY --data=/app/data
-```
-
-- The server will listen on port `8080` by default.
-- Replace `YOUR_SECRET_KEY` with your desired API key.
+-   Millisecond inserts and queries backed by an in-memory collection store
+-   Compact WebSocket protocol with header-based auth and tokenised message types (`ins`, `qry`, …)
+-   Optional persistence when a data folder is supplied
+-   First-party clients:
+    -   Node.js SDK (`clients/node`) published as `@volandoo/fluxiondb-client`
+    -   Go SDK (`clients/go`) with examples and docs
+-   Docker image (`volandoo/fluxiondb`) for single-command deployment
 
 ---
 
-## Node.js Client Library
+## Running the Server
 
-An official Node.js client is available in the `clients/node` folder and can be installed via npm:
+### Docker (recommended)
 
 ```sh
-npm install ltdb-client
+# Pull the upstream image
+docker pull volandoo/fluxiondb:latest
+
+# Run the server
+docker run --init --rm -it \
+  -p 8080:8080 \
+  -v $(pwd)/tmp_data:/app/data \
+  volandoo/fluxiondb:latest \
+  --secret-key=YOUR_SECRET_KEY \
+  --data=/app/data
 ```
 
-### Example Usage
+To build the image from source:
 
-> **Note:** Timestamps must always be in seconds. In Node.js, use `Math.floor(Date.now() / 1000)` to get the current time in seconds.
+```sh
+make build
+SECRET_KEY=YOUR_SECRET_KEY make run
+```
+
+### Native Build (Qt 6)
+
+```sh
+qmake6 fluxiondb.pro
+make
+./fluxiondb --secret-key=YOUR_SECRET_KEY --data=/path/to/data
+```
+
+Arguments:
+
+-   `--secret-key` (required) secures client connections.
+-   `--data` (optional) enables persistence by pointing to a writable directory. Omit to run fully in-memory.
+
+---
+
+### Helm Chart
+
+FluxionDB ships with a Helm chart under `deploy/helm/fluxiondb`. To install it from the repository root:
+
+```sh
+helm install fluxiondb ./deploy/helm/fluxiondb \
+  --set secret.secretKey=YOUR_SECRET_KEY \
+  --set persistence.enabled=true
+```
+
+Key values you may want to override:
+
+-   `secret.secretKey` – master key used for client authentication (required).
+-   `image.tag` – pin to a specific FluxionDB image digest or tag.
+-   `persistence.*` – control volume size, storage class, or use an existing claim.
+
+Set `ingress.enabled=true` and configure `ingress.hosts`/`ingress.tls` to expose the WebSocket service externally.
+
+---
+
+## WebSocket Protocol Overview
+
+All requests are JSON documents. Clients authenticate during the WebSocket handshake by sending an `X-API-Key` header. Supply the master key for full access, or a scoped key that you created with the `keys` management message. The legacy `auth` message is no longer accepted by the server.
+
+| Type    | Purpose                                  |
+| ------- | ---------------------------------------- |
+| `ins`   | Insert one or more records               |
+| `qry`   | Fetch latest record per document         |
+| `cols`  | List collections                         |
+| `qdoc`  | Fetch records for a document             |
+| `ddoc`  | Delete a document                        |
+| `dcol`  | Delete a collection                      |
+| `drec`  | Delete a single record                   |
+| `dmrec` | Delete multiple records                  |
+| `sval`  | Set key-value entry                      |
+| `gval`  | Get key-value entry                      |
+| `rval`  | Remove key-value entry                   |
+| `gvals` | Fetch all key-value entries              |
+| `gkeys` | Fetch all keys                           |
+| `keys`  | Manage API keys (add/remove scoped keys) |
+
+### API Key Scopes
+
+The built-in master key always has full access, cannot be removed, and is the only credential allowed to create or revoke other keys. Scoped keys created via the `keys` message support three levels:
+
+-   `readonly` – query-only access.
+-   `read_write` – read and insert/update operations.
+-   `read_write_delete` – full access, including destructive operations.
+
+Both clients handle the JSON marshalling for you, as well as sending the required headers.
+
+### Managing API Keys Manually
+
+To create or revoke scoped keys without an SDK, send a `keys` message after the socket is established (using the master key in the handshake):
+
+```json
+{
+    "id": "create-1",
+    "type": "keys",
+    "data": "{\"action\":\"add\",\"key\":\"analytics-reader\",\"scope\":\"readonly\"}"
+}
+```
+
+Removing a key works the same way:
+
+```json
+{
+    "id": "remove-1",
+    "type": "keys",
+    "data": "{\"action\":\"remove\",\"key\":\"analytics-reader\"}"
+}
+```
+
+Responses include the original `id` plus a `"status": "ok"` field on success, or `"error"` when the operation is rejected. The master key always retains `read_write_delete` scope and cannot be removed.
+
+---
+
+## Node.js Client
+
+Install from npm:
+
+```sh
+npm install @volandoo/fluxiondb-client
+```
+
+Example:
 
 ```js
-const { LTDBClient } = require('ltdb-client');
+import FluxionDBClient from "@volandoo/fluxiondb-client";
 
-const client = new LTDBClient({
-  url: 'ws://localhost:8080', // LTDB server WebSocket URL
-  apiKey: 'YOUR_SECRET_KEY',  // The same key used to start the server
-});
+const client = new FluxionDBClient({ url: "ws://localhost:8080", apiKey: "YOUR_SECRET_KEY" });
 
-async function main() {
-  // Insert a time series record
-  await client.insert([
-    {
-      ts: Math.floor(Date.now() / 1000), // Timestamp in seconds
-      key: 'user123',
-      data: JSON.stringify({ temperature: 22.5 }),
-      collection: 'sensors',
-    },
-  ]);
+const now = Math.floor(Date.now() / 1000);
+await client.insertMultipleDocumentRecords([
+    { ts: now, key: "device-1", data: JSON.stringify({ temperature: 22.5 }), collection: "sensors" },
+]);
 
-  // Fetch all collections
-  const collections = await client.fetchCollections();
-  console.log('Collections:', collections);
+const collections = await client.fetchCollections();
+console.log(collections);
 
-  // Fetch records for a user in a collection
-  const now = Math.floor(Date.now() / 1000);
-  const records = await client.fetchRecords({
-    collection: 'sensors',
-    key: 'user123',
-    from: now - 3600, // 1 hour ago
+const latest = await client.fetchLatestDocumentRecords({ collection: "sensors", ts: now });
+console.log(latest);
+
+const history = await client.fetchDocument({
+    collection: "sensors",
+    key: "device-1",
+    from: now - 3600,
     to: now,
-  });
-  console.log('Records:', records);
+});
+console.log(history);
 
-  client.close();
-}
-
-main();
+await client.close();
 ```
+
+Scoped access can be provisioned at runtime:
+
+```ts
+await client.addApiKey({ key: "sensor-reader", scope: "readonly" });
+await client.removeApiKey({ key: "sensor-reader" });
+```
+
+The full TypeScript source, tests, and build tooling live under `clients/node/`.
+
+---
+
+## Go Client
+
+Add the module:
+
+```sh
+go get github.com/volandoo/fluxiondb/clients/go
+```
+
+Example:
+
+```go
+client := fluxiondb.NewClient("ws://localhost:8080", "YOUR_SECRET_KEY")
+if err := client.Connect(); err != nil {
+    log.Fatal(err)
+}
+defer client.Close()
+
+now := time.Now().Unix()
+_ = client.InsertSingleDocumentRecord(fluxiondb.LTDBInsertMessageRequest{
+    TS:         now,
+    Key:        "device-1",
+    Data:       `{"temperature":22.5}`,
+    Collection: "sensors",
+})
+
+latest, _ := client.FetchLatestDocumentRecords(fluxiondb.LTDBFetchSessionsParams{
+    Collection: "sensors",
+    TS:         now,
+})
+
+fmt.Println(latest)
+```
+
+See `clients/go/README.md` and the example app in `clients/go/example/` for more.
+
+---
+
+## Development
+
+-   `make build` – build the Docker image
+-   `SECRET_KEY=dev make run` – run the server in Docker with persistence mounted at `tmp_data/`
+-   `qmake6 fluxiondb.pro && make` – native build (requires Qt 6 Core + WebSockets)
+-   `cd clients/node && npm install && npm run build` – build Node client bundle
+-   `cd clients/go && go test ./...` – run Go client tests
+
+### Repository Layout
+
+-   `src/` – Qt/C++17 server sources
+-   `clients/node/` – Node.js SDK (TypeScript)
+-   `clients/go/` – Go SDK
+-   `tmp_data/` – sample data mount point when running locally
 
 ---
 
 ## License
 
-This project is licensed under the Apache-2.0 License. 
+Apache-2.0

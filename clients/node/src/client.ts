@@ -1,3 +1,4 @@
+import WebSocket, { RawData } from "ws";
 import {
     LTDBCollectionsResponse,
     LTDBFetchLatestRecordsParams,
@@ -16,10 +17,13 @@ import {
     LTDBInsertMessageRequest,
     LTDBFetchRecordsParams,
     LTDBDeleteDocumentParams,
+    LTDBManageApiKeyResponse,
+    LTDBAddApiKeyParams,
+    LTDBRemoveApiKeyParams,
+    LTDBManageApiKeyParams,
 } from "./types";
 
 const MESSAGE_TYPES = {
-    AUTH: "auth",
     INSERT: "ins",
     QUERY_RECORDS: "qry",
     QUERY_COLLECTIONS: "cols",
@@ -33,6 +37,7 @@ const MESSAGE_TYPES = {
     REMOVE_VALUE: "rval",
     GET_ALL_VALUES: "gvals",
     GET_ALL_KEYS: "gkeys",
+    MANAGE_API_KEYS: "keys",
 } as const;
 
 type WebSocketResponse = {
@@ -45,7 +50,7 @@ type WebSocketMessage = {
     data: string;
 };
 
-class LTDBClient {
+class FluxionDBClient {
     private ws: WebSocket | null = null;
     private readonly url: string;
     private inflightRequests: { [id: string]: (response: any) => void; } = {};
@@ -78,60 +83,76 @@ class LTDBClient {
 
         this.isConnecting = true;
         this.connectionPromise = new Promise<void>((resolve, reject) => {
-            // Create a new promise.
-            this.ws = new WebSocket(this.url);
+            try {
+                this.ws = new WebSocket(this.url, {
+                    headers: {
+                        "X-API-Key": this.apiKey,
+                    },
+                });
+            } catch (error) {
+                this.isConnecting = false;
+                this.connectionPromise = null;
+                reject(error as Error);
+                return;
+            }
 
-            this.ws.onopen = () => {
+            this.ws.on("open", () => {
                 console.log("WebSocket connected");
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
                 this.isReconnecting = false;
+                resolve();
+            });
 
-                const messageId = this.generateId();
-                this.inflightRequests[messageId] = () => {
-                    resolve(); // Resolve the promise on successful connection
-                };
-                this.ws!.send(
-                    JSON.stringify({
-                        id: messageId,
-                        type: MESSAGE_TYPES.AUTH,
-                        data: this.apiKey,
-                    })
-                );
-            };
-
-            this.ws.onmessage = (event: MessageEvent) => {
+            this.ws.on("message", (data: RawData) => {
                 try {
-                    const response: WebSocketResponse = JSON.parse(event.data);
+                    const payload = (() => {
+                        if (typeof data === "string") {
+                            return data;
+                        }
+                        if (data instanceof ArrayBuffer) {
+                            return Buffer.from(data).toString();
+                        }
+                        if (Array.isArray(data)) {
+                            return Buffer.concat(data).toString();
+                        }
+                        return data.toString();
+                    })();
+                    const response: WebSocketResponse = JSON.parse(payload);
                     const callback = this.inflightRequests[response.id];
                     if (callback) {
                         callback(response);
                         delete this.inflightRequests[response.id];
+                    } else if (response.error) {
+                        console.warn(`Received error response: ${response.error}`);
                     } else {
                         console.warn(`Received unexpected message with id: ${response.id}`, response);
                     }
                 } catch (error) {
                     console.error("Error parsing WebSocket message:", error);
                 }
-            };
+            });
 
-            this.ws.onclose = (event: CloseEvent) => {
-                console.log("WebSocket disconnected:", event.code, event.reason);
+            this.ws.on("close", (code: number, reason: Buffer) => {
+                const reasonText = reason.toString() || "no reason";
+                console.log("WebSocket disconnected:", code, reasonText);
                 this.isConnecting = false;
                 this.connectionPromise = null; // Clear the promise on close/error
+                this.ws = null;
                 this.cleanupOnClose();
                 this.reconnect();
-                reject(new Error(`WebSocket closed: ${event.code} ${event.reason}`)); // Reject on close
-            };
+                reject(new Error(`WebSocket closed: ${code} ${reasonText}`)); // Reject on close
+            });
 
-            this.ws.onerror = (error: Event) => {
+            this.ws.on("error", (error: Error) => {
                 console.error("WebSocket error:", error);
                 this.isConnecting = false;
                 this.connectionPromise = null; // Clear the promise on close/error
+                this.ws = null;
                 this.cleanupOnClose();
                 this.reconnect(); // Treat errors like a close event and attempt reconnect
                 reject(error); // Reject the promise on error.
-            };
+            });
         });
 
         return this.connectionPromise;
@@ -349,6 +370,28 @@ class LTDBClient {
             data: JSON.stringify(params),
         });
     }
+
+    public async addApiKey(params: LTDBAddApiKeyParams): Promise<LTDBManageApiKeyResponse> {
+        return this.manageApiKey({
+            action: "add",
+            key: params.key,
+            scope: params.scope,
+        });
+    }
+
+    public async removeApiKey(params: LTDBRemoveApiKeyParams): Promise<LTDBManageApiKeyResponse> {
+        return this.manageApiKey({
+            action: "remove",
+            key: params.key,
+        });
+    }
+
+    private async manageApiKey(params: LTDBManageApiKeyParams): Promise<LTDBManageApiKeyResponse> {
+        return this.send<LTDBManageApiKeyResponse>({
+            type: MESSAGE_TYPES.MANAGE_API_KEYS,
+            data: JSON.stringify(params),
+        });
+    }
 }
 
-export default LTDBClient;
+export default FluxionDBClient;

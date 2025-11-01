@@ -10,7 +10,7 @@ DeleteRecord DeleteRecord::fromJsonObject(const QJsonObject& jsonObject, bool* o
     DeleteRecord query;
     query.key = jsonObject["key"].toString();
     query.collection = jsonObject["collection"].toString();
-    query.ts = jsonObject["ts"].toInt();
+    query.ts = jsonObject["ts"].toVariant().toLongLong();
     if (ok) *ok = true;
     return query;
 }

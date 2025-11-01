@@ -1,4 +1,4 @@
-module github.com/volandoo/ltdb/clients/go
+module github.com/volandoo/fluxiondb/clients/go
 
 go 1.21
 

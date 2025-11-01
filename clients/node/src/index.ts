@@ -1,4 +1,4 @@
-import LTDBClient from "./client";
+import FluxionDBClient from "./client";
 import {
     LTDBCollectionsResponse,
     LTDBFetchLatestRecordsParams,
@@ -17,9 +17,18 @@ import {
     LTDBDeleteValueParams,
     LTDBInsertMessageRequest,
     LTDBFetchRecordsParams,
+    LTDBManageApiKeyResponse,
+    LTDBAddApiKeyParams,
+    LTDBRemoveApiKeyParams,
+    LTDBApiKeyScope,
 } from "./types";
 
+const LTDBClient = FluxionDBClient;
+
+export default FluxionDBClient;
+
 export {
+    FluxionDBClient,
     LTDBClient,
     LTDBCollectionsResponse,
     LTDBFetchLatestRecordsParams,
@@ -38,4 +47,8 @@ export {
     LTDBDeleteValueParams,
     LTDBInsertMessageRequest,
     LTDBFetchRecordsParams,
+    LTDBManageApiKeyResponse,
+    LTDBAddApiKeyParams,
+    LTDBRemoveApiKeyParams,
+    LTDBApiKeyScope,
 };

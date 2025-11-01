@@ -5,8 +5,28 @@ export type LTDBInsertMessageRequest = {
     collection: string;
 };
 
-export type LTDBAPIKeyRequest = {
-    data: string;
+export type LTDBApiKeyScope = "readonly" | "read_write" | "read_write_delete";
+
+export type LTDBManageApiKeyParams = {
+    action: "add" | "remove";
+    key: string;
+    scope?: LTDBApiKeyScope;
+};
+
+export type LTDBAddApiKeyParams = {
+    key: string;
+    scope: LTDBApiKeyScope;
+};
+
+export type LTDBRemoveApiKeyParams = {
+    key: string;
+};
+
+export type LTDBManageApiKeyResponse = {
+    id: string;
+    status?: string;
+    error?: string;
+    scope?: string;
 };
 
 export type LTDBInsertMessageResponse = {
@@ -103,4 +123,3 @@ export type LTDBDeleteValueParams = {
     collection: string;
     key: string;
 };
-
