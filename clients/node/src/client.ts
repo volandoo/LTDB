@@ -1,26 +1,26 @@
 import WebSocket, { RawData } from "ws";
 import {
-    LTDBCollectionsResponse,
-    LTDBFetchLatestRecordsParams,
-    LTDBQueryResponse,
-    LTDBDeleteCollectionParams,
-    LTDBInsertMessageResponse,
-    LTDBQueryCollectionResponse,
-    LTDBDeleteRecord,
-    LTDBSetValueParams,
-    LTDBGetValueParams,
-    LTDBKeyValueResponse,
-    LTDBKeyValueAllKeysResponse,
-    LTDBKeyValueAllValuesResponse,
-    LTDBCollectionParam,
-    LTDBDeleteValueParams,
-    LTDBInsertMessageRequest,
-    LTDBFetchRecordsParams,
-    LTDBDeleteDocumentParams,
-    LTDBManageApiKeyResponse,
-    LTDBAddApiKeyParams,
-    LTDBRemoveApiKeyParams,
-    LTDBManageApiKeyParams,
+    CollectionsResponse,
+    FetchLatestRecordsParams,
+    QueryResponse,
+    DeleteCollectionParams,
+    InsertMessageResponse,
+    QueryCollectionResponse,
+    DeleteRecord,
+    SetValueParams,
+    GetValueParams,
+    KeyValueResponse,
+    KeyValueAllKeysResponse,
+    KeyValueAllValuesResponse,
+    CollectionParam,
+    DeleteValueParams,
+    InsertMessageRequest,
+    FetchRecordsParams,
+    DeleteDocumentParams,
+    ManageApiKeyResponse,
+    AddApiKeyParams,
+    RemoveApiKeyParams,
+    ManageApiKeyParams,
 } from "./types";
 
 const MESSAGE_TYPES = {
@@ -61,6 +61,7 @@ class FluxionDBClient {
     private readonly reconnectInterval: number = 5000; // milliseconds
     private connectionPromise: Promise<void> | null = null; // Promise to track connection status
     private apiKey: string;
+    private shouldReconnect: boolean = true; // Flag to track if reconnection should happen
 
     constructor({ url, apiKey }: { url: string; apiKey: string; }) {
         this.url = url;
@@ -100,6 +101,7 @@ class FluxionDBClient {
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
                 this.isReconnecting = false;
+                this.shouldReconnect = true; // Enable auto-reconnect when connection is established
                 resolve();
             });
 
@@ -139,7 +141,9 @@ class FluxionDBClient {
                 this.connectionPromise = null; // Clear the promise on close/error
                 this.ws = null;
                 this.cleanupOnClose();
-                this.reconnect();
+                if (this.shouldReconnect) {
+                    this.reconnect();
+                }
                 reject(new Error(`WebSocket closed: ${code} ${reasonText}`)); // Reject on close
             });
 
@@ -149,7 +153,9 @@ class FluxionDBClient {
                 this.connectionPromise = null; // Clear the promise on close/error
                 this.ws = null;
                 this.cleanupOnClose();
-                this.reconnect(); // Treat errors like a close event and attempt reconnect
+                if (this.shouldReconnect) {
+                    this.reconnect(); // Treat errors like a close event and attempt reconnect
+                }
                 reject(error); // Reject the promise on error.
             });
         });
@@ -207,6 +213,7 @@ class FluxionDBClient {
     }
 
     public close(): void {
+        this.shouldReconnect = false; // Prevent automatic reconnection
         if (this.ws) {
             this.ws.close();
             this.ws = null;
@@ -268,15 +275,15 @@ class FluxionDBClient {
     ************************************************************/
 
     public async fetchCollections() {
-        const resp = await this.send<LTDBCollectionsResponse>({
+        const resp = await this.send<CollectionsResponse>({
             type: MESSAGE_TYPES.QUERY_COLLECTIONS,
             data: "{}",
         });
         return resp.collections;
     }
 
-    public async deleteCollection(params: LTDBDeleteCollectionParams) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async deleteCollection(params: DeleteCollectionParams) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_COLLECTION,
             data: JSON.stringify({ collection: params.collection }),
         });
@@ -286,91 +293,91 @@ class FluxionDBClient {
      * Fetch the latest records for a given collection. If device_id is provided, fetch the latest records for that device_id only
      * if "from" is provided, fetch the records only starting from that timestamp and always up to the "ts" timestamp.
      */
-    public async fetchLatestDocumentRecords(params: LTDBFetchLatestRecordsParams) {
-        const resp = await this.send<LTDBQueryResponse>({
+    public async fetchLatestRecords(params: FetchLatestRecordsParams) {
+        const resp = await this.send<QueryResponse>({
             type: MESSAGE_TYPES.QUERY_RECORDS,
             data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "", from: params.from || 0 }),
         });
         return resp.records;
     }
 
-    public async insertMultipleDocumentRecords(items: LTDBInsertMessageRequest[]) {
+    public async insertMultipleRecords(items: InsertMessageRequest[]) {
         return this.send({ data: JSON.stringify(items), type: MESSAGE_TYPES.INSERT });
     }
 
-    public async insertSingleDocumentRecord(items: LTDBInsertMessageRequest) {
+    public async insertSingleRecord(items: InsertMessageRequest) {
         return this.send({ data: JSON.stringify([items]), type: MESSAGE_TYPES.INSERT });
     }
 
-    public async fetchDocument(params: LTDBFetchRecordsParams) {
-        const resp = await this.send<LTDBQueryCollectionResponse>({
+    public async fetchDocument(params: FetchRecordsParams) {
+        const resp = await this.send<QueryCollectionResponse>({
             type: MESSAGE_TYPES.QUERY_DOCUMENT,
             data: JSON.stringify(params),
         });
         return resp.records;
     }
 
-    public async deleteDocument(params: LTDBDeleteDocumentParams) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async deleteDocument(params: DeleteDocumentParams) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_DOCUMENT,
             data: JSON.stringify(params),
         });
     }
 
-    public async deleteDocumentRecord(params: LTDBDeleteRecord) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async deleteRecord(params: DeleteRecord) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_RECORD,
             data: JSON.stringify(params),
         });
     }
 
-    public async deleteMultipleDocumentRecords(params: LTDBDeleteRecord[]) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async deleteMultipleRecords(params: DeleteRecord[]) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_MULTIPLE_RECORDS,
             data: JSON.stringify(params),
         });
     }
 
     // Key Value API
-    public async setValue(params: LTDBSetValueParams) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async setValue(params: SetValueParams) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.SET_VALUE,
             data: JSON.stringify(params),
         });
     }
 
-    public async getValue(params: LTDBGetValueParams) {
-        const resp = await this.send<LTDBKeyValueResponse>({
+    public async getValue(params: GetValueParams) {
+        const resp = await this.send<KeyValueResponse>({
             type: MESSAGE_TYPES.GET_VALUE,
             data: JSON.stringify(params),
         });
         return resp.value;
     }
 
-    public async getKeys(params: LTDBCollectionParam) {
-        const resp = await this.send<LTDBKeyValueAllKeysResponse>({
+    public async getKeys(params: CollectionParam) {
+        const resp = await this.send<KeyValueAllKeysResponse>({
             type: MESSAGE_TYPES.GET_ALL_KEYS,
             data: JSON.stringify(params),
         });
         return resp.keys;
     }
 
-    public async getValues(params: LTDBCollectionParam) {
-        const resp = await this.send<LTDBKeyValueAllValuesResponse>({
+    public async getValues(params: CollectionParam) {
+        const resp = await this.send<KeyValueAllValuesResponse>({
             type: MESSAGE_TYPES.GET_ALL_VALUES,
             data: JSON.stringify(params),
         });
         return resp.values;
     }
 
-    public async deleteValue(params: LTDBDeleteValueParams) {
-        await this.send<LTDBInsertMessageResponse>({
+    public async deleteValue(params: DeleteValueParams) {
+        await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.REMOVE_VALUE,
             data: JSON.stringify(params),
         });
     }
 
-    public async addApiKey(params: LTDBAddApiKeyParams): Promise<LTDBManageApiKeyResponse> {
+    public async addApiKey(params: AddApiKeyParams): Promise<ManageApiKeyResponse> {
         return this.manageApiKey({
             action: "add",
             key: params.key,
@@ -378,15 +385,15 @@ class FluxionDBClient {
         });
     }
 
-    public async removeApiKey(params: LTDBRemoveApiKeyParams): Promise<LTDBManageApiKeyResponse> {
+    public async removeApiKey(params: RemoveApiKeyParams): Promise<ManageApiKeyResponse> {
         return this.manageApiKey({
             action: "remove",
             key: params.key,
         });
     }
 
-    private async manageApiKey(params: LTDBManageApiKeyParams): Promise<LTDBManageApiKeyResponse> {
-        return this.send<LTDBManageApiKeyResponse>({
+    private async manageApiKey(params: ManageApiKeyParams): Promise<ManageApiKeyResponse> {
+        return this.send<ManageApiKeyResponse>({
             type: MESSAGE_TYPES.MANAGE_API_KEYS,
             data: JSON.stringify(params),
         });

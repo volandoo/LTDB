@@ -1,39 +1,39 @@
-export type LTDBInsertMessageRequest = {
+export type InsertMessageRequest = {
     ts: number;
     key: string;
     data: string;
     collection: string;
 };
 
-export type LTDBApiKeyScope = "readonly" | "read_write" | "read_write_delete";
+export type ApiKeyScope = "readonly" | "read_write" | "read_write_delete";
 
-export type LTDBManageApiKeyParams = {
+export type ManageApiKeyParams = {
     action: "add" | "remove";
     key: string;
-    scope?: LTDBApiKeyScope;
+    scope?: ApiKeyScope;
 };
 
-export type LTDBAddApiKeyParams = {
+export type AddApiKeyParams = {
     key: string;
-    scope: LTDBApiKeyScope;
+    scope: ApiKeyScope;
 };
 
-export type LTDBRemoveApiKeyParams = {
+export type RemoveApiKeyParams = {
     key: string;
 };
 
-export type LTDBManageApiKeyResponse = {
+export type ManageApiKeyResponse = {
     id: string;
     status?: string;
     error?: string;
     scope?: string;
 };
 
-export type LTDBInsertMessageResponse = {
+export type InsertMessageResponse = {
     id: string;
 };
 
-export type LTDBQueryResponse = {
+export type QueryResponse = {
     id: string;
     records: {
         [key: string]: {
@@ -43,7 +43,7 @@ export type LTDBQueryResponse = {
     };
 };
 
-export type LTDBQueryCollectionResponse = {
+export type QueryCollectionResponse = {
     id: string;
     records: {
         ts: number;
@@ -51,44 +51,44 @@ export type LTDBQueryCollectionResponse = {
     }[];
 };
 
-export type LTDBCollectionsResponse = {
+export type CollectionsResponse = {
     id: string;
     collections: string[];
 };
 
 // key value response
 
-export type LTDBKeyValueResponse = {
+export type KeyValueResponse = {
     id: string;
     value: string;
 };
 
-export type LTDBKeyValueAllKeysResponse = {
+export type KeyValueAllKeysResponse = {
     id: string;
     keys: string[];
 };
 
-export type LTDBKeyValueAllValuesResponse = {
+export type KeyValueAllValuesResponse = {
     id: string;
     values: { [key: string]: string; };
 };
 
-export type LTDBCollectionParam = {
+export type CollectionParam = {
     collection: string;
 };
 
-export type LTDBFetchLatestRecordsParams = {
+export type FetchLatestRecordsParams = {
     collection: string;
     ts: number;
     key?: string;
     from?: number;
 };
 
-export type LTDBDeleteCollectionParams = {
+export type DeleteCollectionParams = {
     collection: string;
 };
 
-export type LTDBFetchRecordsParams = {
+export type FetchRecordsParams = {
     collection: string;
     key: string;
     from: number;
@@ -97,29 +97,29 @@ export type LTDBFetchRecordsParams = {
     reverse?: boolean;
 };
 
-export type LTDBDeleteDocumentParams = {
+export type DeleteDocumentParams = {
     key: string;
     collection: string;
 };
 
-export type LTDBDeleteRecord = {
+export type DeleteRecord = {
     key: string;
     collection: string;
     ts: number;
 };
 
-export type LTDBSetValueParams = {
+export type SetValueParams = {
     collection: string;
     key: string;
     value: string;
 };
 
-export type LTDBGetValueParams = {
+export type GetValueParams = {
     collection: string;
     key: string;
 };
 
-export type LTDBDeleteValueParams = {
+export type DeleteValueParams = {
     collection: string;
     key: string;
 };

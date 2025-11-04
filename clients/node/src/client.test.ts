@@ -47,7 +47,7 @@ describe('FluxionDBClient Integration', () => {
     beforeAll(async () => {
         const records = createMockData();
         await client.deleteCollection({ collection: testCollection });
-        await client.insertMultipleDocumentRecords(records);
+        await client.insertMultipleRecords(records);
     }, 10000);
 
     afterAll(async () => {
@@ -56,7 +56,7 @@ describe('FluxionDBClient Integration', () => {
     });
 
     it('should fetch latest document records of all four', async () => {
-        const result = await client.fetchLatestDocumentRecords({
+        const result = await client.fetchLatestRecords({
             collection: testCollection,
             ts: Date.now(),
         });
@@ -72,7 +72,7 @@ describe('FluxionDBClient Integration', () => {
     }, 10000);
 
     it('should fetch latest document records of only three', async () => {
-        const result = await client.fetchLatestDocumentRecords({
+        const result = await client.fetchLatestRecords({
             collection: testCollection,
             ts: Date.now(),
             from: 1747604423 + 1,
