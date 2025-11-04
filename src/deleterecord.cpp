@@ -8,8 +8,8 @@
 DeleteRecord DeleteRecord::fromJsonObject(const QJsonObject& jsonObject, bool* ok) {
 
     DeleteRecord query;
-    query.key = jsonObject["key"].toString();
-    query.collection = jsonObject["collection"].toString();
+    query.doc = jsonObject["doc"].toString();
+    query.col = jsonObject["col"].toString();
     query.ts = jsonObject["ts"].toVariant().toLongLong();
     if (ok) *ok = true;
     return query;
@@ -36,12 +36,12 @@ DeleteRecord DeleteRecord::fromJson(const QString& jsonString, bool* ok) {
 
 }
 bool DeleteRecord::isValid() const {
-    if (key.isEmpty()) {
-        qWarning() << "key is empty";
+    if (doc.isEmpty()) {
+        qWarning() << "doc is empty";
         return false;
     }
-    if (collection.isEmpty()) {
-        qWarning() << "collection is empty";
+    if (col.isEmpty()) {
+        qWarning() << "col is empty";
         return false;
     }
     if (ts <= 0) {

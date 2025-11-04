@@ -29,6 +29,7 @@ public:
 
     void clearDocument(const QString& key);
     void deleteRecord(const QString& key, qint64 ts);
+    void deleteRecordsInRange(const QString& key, qint64 fromTs, qint64 toTs);
     void flushToDisk();
     void loadFromDisk();
     bool isEmpty() const {

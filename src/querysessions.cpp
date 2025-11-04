@@ -26,8 +26,8 @@ QuerySessions QuerySessions::fromJson(const QString& jsonString, bool* ok)
     
     payload.ts = obj["ts"].toVariant().toLongLong();
     payload.from = obj["from"].toVariant().toLongLong();
-    payload.key = obj["key"].toString();
-    payload.collection = obj["collection"].toString();
+    payload.doc = obj["doc"].toString();
+    payload.col = obj["col"].toString();
 
 
     if (ok) *ok = payload.isValid();
@@ -36,5 +36,5 @@ QuerySessions QuerySessions::fromJson(const QString& jsonString, bool* ok)
 
 bool QuerySessions::isValid() const
 {
-    return ts > 0 && !collection.isEmpty();
+    return ts > 0 && !col.isEmpty();
 } 

@@ -25,6 +25,7 @@ namespace MessageType {
     inline const QString DeleteCollection = QStringLiteral("dcol");
     inline const QString DeleteRecord = QStringLiteral("drec");
     inline const QString DeleteMultipleRecords = QStringLiteral("dmrec");
+    inline const QString DeleteRecordsRange = QStringLiteral("drrng");
     inline const QString SetValue = QStringLiteral("sval");
     inline const QString GetValue = QStringLiteral("gval");
     inline const QString RemoveValue = QStringLiteral("rval");
@@ -73,6 +74,7 @@ private:
     QString handleDeleteCollection(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteRecord(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteMultipleRecords(QWebSocket* client, const MessageRequest& message);
+    QString handleDeleteRecordsRange(QWebSocket* client, const MessageRequest& message);
     QString handleInsert(QWebSocket* client, const MessageRequest& message);
 
     // key value

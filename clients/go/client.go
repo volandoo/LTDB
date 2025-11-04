@@ -23,6 +23,7 @@ const (
 	messageTypeDeleteCollection = "dcol"
 	messageTypeDeleteRecord     = "drec"
 	messageTypeDeleteMultiple   = "dmrec"
+	messageTypeDeleteRange      = "drrng"
 	messageTypeSetValue         = "sval"
 	messageTypeGetValue         = "gval"
 	messageTypeRemoveValue      = "rval"
@@ -31,7 +32,7 @@ const (
 	messageTypeManageKeys       = "keys"
 )
 
-// Client represents an LTDB WebSocket client
+// Client represents an  WebSocket client
 type Client struct {
 	url                  string
 	apiKey               string
@@ -48,7 +49,7 @@ type Client struct {
 	cancel               context.CancelFunc
 }
 
-// NewClient creates a new LTDB client
+// NewClient creates a new  client
 func NewClient(wsURL, apiKey string) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
@@ -62,7 +63,7 @@ func NewClient(wsURL, apiKey string) *Client {
 	}
 }
 
-// Connect establishes a WebSocket connection to the LTDB server
+// Connect establishes a WebSocket connection to the  server
 func (c *Client) Connect() error {
 	c.connectionMutex.Lock()
 	defer c.connectionMutex.Unlock()
@@ -276,7 +277,7 @@ func (c *Client) Close() {
 
 // FetchCollections fetches all available collections
 func (c *Client) FetchCollections() ([]string, error) {
-	var response LTDBCollectionsResponse
+	var response CollectionsResponse
 	err := c.send(messageTypeQueryCollections, "{}", &response)
 	if err != nil {
 		return nil, err
@@ -284,14 +285,14 @@ func (c *Client) FetchCollections() ([]string, error) {
 	return response.Collections, nil
 }
 
-// FetchLatestDocumentRecords fetches the latest records per document for a collection
-func (c *Client) FetchLatestDocumentRecords(params LTDBFetchLatestRecordsParams) (map[string]LTDBRecordResponse, error) {
+// FetchLatestRecords fetches the latest records per document for a collection
+func (c *Client) FetchLatestRecords(params FetchLatestRecordsParams) (map[string]RecordResponse, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
-	var response LTDBQueryResponse
+	var response QueryResponse
 	err = c.send(messageTypeQueryRecords, string(data), &response)
 	if err != nil {
 		return nil, err
@@ -300,40 +301,40 @@ func (c *Client) FetchLatestDocumentRecords(params LTDBFetchLatestRecordsParams)
 }
 
 // DeleteCollection deletes a collection
-func (c *Client) DeleteCollection(params LTDBDeleteCollectionParams) error {
+func (c *Client) DeleteCollection(params DeleteCollectionParams) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeDeleteCollection, string(data), &response)
 }
 
-// InsertMultipleDocumentRecords inserts multiple records into a document
-func (c *Client) InsertMultipleDocumentRecords(items []LTDBInsertMessageRequest) error {
+// InsertMultipleRecords inserts multiple records into a document
+func (c *Client) InsertMultipleRecords(items []InsertMessageRequest) error {
 	data, err := json.Marshal(items)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeInsert, string(data), &response)
 }
 
 // InsertSingleDocumentRecord inserts a single record into a document
-func (c *Client) InsertSingleDocumentRecord(item LTDBInsertMessageRequest) error {
-	return c.InsertMultipleDocumentRecords([]LTDBInsertMessageRequest{item})
+func (c *Client) InsertSingleDocumentRecord(item InsertMessageRequest) error {
+	return c.InsertMultipleRecords([]InsertMessageRequest{item})
 }
 
 // FetchDocument fetches all records for a specific document according to the provided filters
-func (c *Client) FetchDocument(params LTDBFetchRecordsParams) ([]LTDBRecordResponse, error) {
+func (c *Client) FetchDocument(params FetchRecordsParams) ([]RecordResponse, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
-	var response LTDBQueryCollectionResponse
+	var response QueryCollectionResponse
 	err = c.send(messageTypeQueryDocument, string(data), &response)
 	if err != nil {
 		return nil, err
@@ -342,57 +343,68 @@ func (c *Client) FetchDocument(params LTDBFetchRecordsParams) ([]LTDBRecordRespo
 }
 
 // DeleteDocument deletes an entire document (optionally scoped to a collection)
-func (c *Client) DeleteDocument(params LTDBDeleteDocumentParams) error {
+func (c *Client) DeleteDocument(params DeleteDocumentParams) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeDeleteDocument, string(data), &response)
 }
 
 // DeleteDocumentRecord deletes a single record within a document
-func (c *Client) DeleteDocumentRecord(params LTDBDeleteRecord) error {
+func (c *Client) DeleteDocumentRecord(params DeleteRecord) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeDeleteRecord, string(data), &response)
 }
 
-// DeleteMultipleDocumentRecords deletes multiple records across one or more documents
-func (c *Client) DeleteMultipleDocumentRecords(params []LTDBDeleteRecord) error {
+// DeleteMultipleRecords deletes multiple records across one or more documents
+func (c *Client) DeleteMultipleRecords(params []DeleteRecord) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeDeleteMultiple, string(data), &response)
 }
 
-// SetValue sets a key-value pair
-func (c *Client) SetValue(params LTDBSetValueParams) error {
+// DeleteRecordsRange deletes records within a timestamp range for a specific document
+func (c *Client) DeleteRecordsRange(params DeleteRecordsRange) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
+	return c.send(messageTypeDeleteRange, string(data), &response)
+}
+
+// SetValue sets a key-value pair
+func (c *Client) SetValue(params SetValueParams) error {
+	data, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+
+	var response InsertMessageResponse
 	return c.send(messageTypeSetValue, string(data), &response)
 }
 
 // GetValue gets a value by key
-func (c *Client) GetValue(params LTDBGetValueParams) (string, error) {
+func (c *Client) GetValue(params GetValueParams) (string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return "", err
 	}
 
-	var response LTDBKeyValueResponse
+	var response KeyValueResponse
 	err = c.send(messageTypeGetValue, string(data), &response)
 	if err != nil {
 		return "", err
@@ -401,13 +413,13 @@ func (c *Client) GetValue(params LTDBGetValueParams) (string, error) {
 }
 
 // GetKeys gets all keys in a collection
-func (c *Client) GetKeys(params LTDBCollectionParam) ([]string, error) {
+func (c *Client) GetKeys(params CollectionParam) ([]string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
-	var response LTDBKeyValueAllKeysResponse
+	var response KeyValueAllKeysResponse
 	err = c.send(messageTypeGetAllKeys, string(data), &response)
 	if err != nil {
 		return nil, err
@@ -416,13 +428,13 @@ func (c *Client) GetKeys(params LTDBCollectionParam) ([]string, error) {
 }
 
 // GetValues gets all values in a collection
-func (c *Client) GetValues(params LTDBCollectionParam) (map[string]string, error) {
+func (c *Client) GetValues(params CollectionParam) (map[string]string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
 
-	var response LTDBKeyValueAllValuesResponse
+	var response KeyValueAllValuesResponse
 	err = c.send(messageTypeGetAllValues, string(data), &response)
 	if err != nil {
 		return nil, err
@@ -431,19 +443,19 @@ func (c *Client) GetValues(params LTDBCollectionParam) (map[string]string, error
 }
 
 // DeleteValue deletes a key-value pair
-func (c *Client) DeleteValue(params LTDBDeleteValueParams) error {
+func (c *Client) DeleteValue(params DeleteValueParams) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
 
-	var response LTDBInsertMessageResponse
+	var response InsertMessageResponse
 	return c.send(messageTypeRemoveValue, string(data), &response)
 }
 
 // AddAPIKey registers a new API key with the specified scope
-func (c *Client) AddAPIKey(key string, scope LTDBApiKeyScope) (LTDBManageAPIKeyResponse, error) {
-	payload := LTDBManageAPIKeyParams{
+func (c *Client) AddAPIKey(key string, scope ApiKeyScope) (ManageAPIKeyResponse, error) {
+	payload := ManageAPIKeyParams{
 		Action: "add",
 		Key:    key,
 		Scope:  scope,
@@ -453,8 +465,8 @@ func (c *Client) AddAPIKey(key string, scope LTDBApiKeyScope) (LTDBManageAPIKeyR
 }
 
 // RemoveAPIKey deletes a previously created API key
-func (c *Client) RemoveAPIKey(key string) (LTDBManageAPIKeyResponse, error) {
-	payload := LTDBManageAPIKeyParams{
+func (c *Client) RemoveAPIKey(key string) (ManageAPIKeyResponse, error) {
+	payload := ManageAPIKeyParams{
 		Action: "remove",
 		Key:    key,
 	}
@@ -462,15 +474,15 @@ func (c *Client) RemoveAPIKey(key string) (LTDBManageAPIKeyResponse, error) {
 	return c.manageAPIKey(payload)
 }
 
-func (c *Client) manageAPIKey(params LTDBManageAPIKeyParams) (LTDBManageAPIKeyResponse, error) {
+func (c *Client) manageAPIKey(params ManageAPIKeyParams) (ManageAPIKeyResponse, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
-		return LTDBManageAPIKeyResponse{}, err
+		return ManageAPIKeyResponse{}, err
 	}
 
-	var response LTDBManageAPIKeyResponse
+	var response ManageAPIKeyResponse
 	if err := c.send(messageTypeManageKeys, string(data), &response); err != nil {
-		return LTDBManageAPIKeyResponse{}, err
+		return ManageAPIKeyResponse{}, err
 	}
 
 	return response, nil

@@ -292,6 +292,58 @@ void Collection::deleteRecord(const QString &key, qint64 ts)
     }
 }
 
+void Collection::deleteRecordsInRange(const QString &key, qint64 fromTs, qint64 toTs)
+{
+    auto it = m_data.find(key);
+    if (it == m_data.end()) {
+        return;
+    }
+    auto &records = it->second;
+    
+    // Find the first record >= fromTs
+    auto beginIt = std::lower_bound(records.begin(), records.end(), fromTs,
+                                    [](const std::unique_ptr<DataRecord> &a, qint64 b)
+                                    {
+                                        return a->timestamp < b;
+                                    });
+    
+    // Find the first record > toTs
+    auto endIt = std::upper_bound(records.begin(), records.end(), toTs,
+                                  [](qint64 b, const std::unique_ptr<DataRecord> &a)
+                                  {
+                                      return b < a->timestamp;
+                                  });
+    
+    if (beginIt == records.end() || beginIt >= endIt) {
+        return;
+    }
+    
+    records.erase(beginIt, endIt);
+    
+    if (records.empty()) {
+        std::vector<std::unique_ptr<DataRecord>>{}.swap(records);
+        m_data.erase(it);
+        m_data.rehash(0);
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+        return;
+    }
+    
+    const auto capacity = records.capacity();
+    const auto size = records.size();
+    if (capacity > 0 && size * 2 < capacity)
+    {
+        std::vector<std::unique_ptr<DataRecord>> compacted;
+        compacted.reserve(size);
+        std::move(records.begin(), records.end(), std::back_inserter(compacted));
+        records.swap(compacted);
+#ifdef __linux__
+        malloc_trim(0);
+#endif
+    }
+}
+
 int Collection::getLatestRecordIndex(const std::vector<std::unique_ptr<DataRecord>> &records, qint64 timestamp)
 {
     if (records.empty())

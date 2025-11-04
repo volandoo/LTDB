@@ -17,7 +17,8 @@ SOURCES += \
     src/deletedocument.cpp \
     src/keyvalue.cpp \
     src/deleterecord.cpp \
-    src/deletemultiplerecords.cpp
+    src/deletemultiplerecords.cpp \
+    src/deleterecordsrange.cpp
 
 HEADERS += \
     src/insertrequest.h \
@@ -34,4 +35,5 @@ HEADERS += \
     src/keyvalue.h \
     src/deleterecord.h \
     src/deletemultiplerecords.h \
+    src/deleterecordsrange.h \
     src/json/json.hpp

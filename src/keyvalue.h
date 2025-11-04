@@ -6,7 +6,7 @@
 struct KeyValue {
     QString key;
     QString value;
-    QString collection;
+    QString col;
     
     static KeyValue fromJson(const QString& jsonString, bool* ok = nullptr);
     bool isValid() const;

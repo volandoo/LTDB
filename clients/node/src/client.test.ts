@@ -17,10 +17,10 @@ const createMockData = () => {
         for (let i = 0; i < 1000; i++) {
             const ts = now + i;
             const data = JSON.stringify({ value: i });
-            records.push({ ts, key: documentId, data, collection: testCollection });
+            records.push({ ts, doc: documentId, data, col: testCollection });
         }
     }
-    records.push({ ts: now - 1, key: 'collection_4', data: 'test', collection: testCollection });
+    records.push({ ts: now - 1, doc: 'collection_4', data: 'test', col: testCollection });
 
     return records;
 };
@@ -46,7 +46,7 @@ describe('FluxionDBClient Integration', () => {
 
     beforeAll(async () => {
         const records = createMockData();
-        await client.deleteCollection({ collection: testCollection });
+        await client.deleteCollection({ col: testCollection });
         await client.insertMultipleRecords(records);
     }, 10000);
 
@@ -57,7 +57,7 @@ describe('FluxionDBClient Integration', () => {
 
     it('should fetch latest document records of all four', async () => {
         const result = await client.fetchLatestRecords({
-            collection: testCollection,
+            col: testCollection,
             ts: Date.now(),
         });
         const keys = Object.keys(result);
@@ -73,7 +73,7 @@ describe('FluxionDBClient Integration', () => {
 
     it('should fetch latest document records of only three', async () => {
         const result = await client.fetchLatestRecords({
-            collection: testCollection,
+            col: testCollection,
             ts: Date.now(),
             from: 1747604423 + 1,
         });

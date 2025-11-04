@@ -25,8 +25,8 @@ DeleteDocument DeleteDocument::fromJson(const QString& jsonString, bool* ok)
     QJsonObject obj = doc.object();
     
     // Extract fields
-    query.key = obj["key"].toString();
-    query.collection = obj["collection"].toString();
+    query.doc = obj["doc"].toString();
+    query.col = obj["col"].toString();
 
     if (ok) *ok = query.isValid();
     return query;
@@ -34,5 +34,5 @@ DeleteDocument DeleteDocument::fromJson(const QString& jsonString, bool* ok)
 
 bool DeleteDocument::isValid() const
 {
-    return !key.isEmpty();
+    return !doc.isEmpty();
 } 

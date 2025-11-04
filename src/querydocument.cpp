@@ -26,8 +26,8 @@ QueryDocument QueryDocument::fromJson(const QString& jsonString, bool* ok)
     // Extract fields
     query.from = obj["from"].toVariant().toLongLong();
     query.to = obj["to"].toVariant().toLongLong();
-    query.key = obj["key"].toString();
-    query.collection = obj["collection"].toString();
+    query.doc = obj["doc"].toString();
+    query.col = obj["col"].toString();
     query.limit = obj["limit"].toVariant().toLongLong();
     query.reverse = obj["reverse"].toVariant().toBool();
 
@@ -37,5 +37,5 @@ QueryDocument QueryDocument::fromJson(const QString& jsonString, bool* ok)
 
 bool QueryDocument::isValid() const
 {
-    return to > 0 && from <= to && !key.isEmpty() && !collection.isEmpty();
+    return to > 0 && from <= to && !doc.isEmpty() && !col.isEmpty();
 } 

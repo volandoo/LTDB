@@ -24,7 +24,7 @@
 ## Testing Guidelines
 
 -   Server logic is currently validated through client integrations; add focused Qt unit tests when extending core modules.
--   Node: `npm install` then `npx jest --config jest.config.js --runInBand`. Requires an LTDB server at `ws://localhost:8080` with the matching `--secret-key`.
+-   Node: `npm install` then `npx jest --config jest.config.js --runInBand`. Requires an server at `ws://localhost:8080` with the matching `--secret-key`.
 -   Go: `go test ./...` runs fast unit tests with no external dependencies. Extend tests using the existing table-driven style.
 
 ## Commit & Pull Request Guidelines

@@ -20,6 +20,7 @@
 #include "keyvalue.h"
 #include "deleterecord.h"
 #include "deletemultiplerecords.h"
+#include "deleterecordsrange.h"
 
 
 WebSocket::WebSocket(const QString &masterKey, const QString &dataFolder, int flushIntervalSeconds, QObject *parent) : QObject(parent)
@@ -213,6 +214,10 @@ void WebSocket::handleMessage(QWebSocket *client, const MessageRequest &message)
     {
         response = handleDeleteMultipleRecords(client, message);
     }
+    else if (message.type == MessageType::DeleteRecordsRange)
+    {
+        response = handleDeleteRecordsRange(client, message);
+    }
     else if (message.type == MessageType::SetValue)
     {
         response = handleSetValue(client, message);
@@ -267,13 +272,13 @@ QString WebSocket::handleInsert(QWebSocket *client, const MessageRequest &messag
 
     foreach (InsertRequest payload, payloads)
     {
-        auto database = m_databases[payload.collection].get();
+        auto database = m_databases[payload.col].get();
         if (database == nullptr)
         {
-            m_databases[payload.collection] = std::make_unique<Collection>(payload.collection, m_dataFolder);
-            database = m_databases[payload.collection].get();
+            m_databases[payload.col] = std::make_unique<Collection>(payload.col, m_dataFolder);
+            database = m_databases[payload.col].get();
         }
-        database->insert(payload.ts, payload.key, payload.data);
+        database->insert(payload.ts, payload.doc, payload.data);
     }
 
     QJsonObject obj;
@@ -292,18 +297,18 @@ QString WebSocket::handleQuerySessions(QWebSocket *client, const MessageRequest 
         client->close();
         return "";
     }
-    auto database = m_databases[query.collection].get();
+    auto database = m_databases[query.col].get();
     QJsonObject dataObj;
     QJsonObject obj;
     obj["id"] = message.id;
     if (database == nullptr)
     {
-        m_databases.erase(query.collection);   
+        m_databases.erase(query.col);   
         obj["records"] = QJsonObject();
         QJsonDocument doc(obj);
         return doc.toJson(QJsonDocument::Compact);
     }
-    auto records = database->getAllRecords(query.ts, query.key, query.from);
+    auto records = database->getAllRecords(query.ts, query.doc, query.from);
 
     foreach (const QString &key, records.keys())
     {
@@ -345,18 +350,18 @@ QString WebSocket::handleQueryDocument(QWebSocket *client, const MessageRequest 
     }
 
     QJsonObject dataObj;
-    auto database = m_databases[queryDocument.collection].get();
+    auto database = m_databases[queryDocument.col].get();
     QJsonArray recordsArray;
 
     dataObj["id"] = message.id;
     if (database == nullptr)
     {
-        m_databases.erase(queryDocument.collection);   
+        m_databases.erase(queryDocument.col);   
         dataObj["records"] = recordsArray;
         QJsonDocument doc(dataObj);
         return doc.toJson(QJsonDocument::Compact);
     }
-    auto records = database->getAllRecordsForDocument(queryDocument.key, queryDocument.from, queryDocument.to, queryDocument.reverse, queryDocument.limit);
+    auto records = database->getAllRecordsForDocument(queryDocument.doc, queryDocument.from, queryDocument.to, queryDocument.reverse, queryDocument.limit);
 
     foreach (const DataRecord *record, records)
     {
@@ -382,14 +387,14 @@ QString WebSocket::handleDeleteDocument(QWebSocket *client, const MessageRequest
     obj["id"] = message.id;
     QJsonDocument doc(obj);
 
-    if (query.collection.isEmpty())
+    if (query.col.isEmpty())
     {
         // Hidden capability: empty collection deletes this document across all collections; SDKs keep this private.
         QVector<QString> toErase;
         
         for (auto &[key, value] : m_databases)
         {
-            value->clearDocument(query.key);
+            value->clearDocument(query.doc);
             if (value->isEmpty())
             {
                 toErase.append(key);
@@ -405,19 +410,19 @@ QString WebSocket::handleDeleteDocument(QWebSocket *client, const MessageRequest
     }
     else
     {
-        auto database = m_databases[query.collection].get();
+        auto database = m_databases[query.col].get();
         if (database == nullptr)
         {
-            m_databases.erase(query.collection);   
-            qWarning() << "Collection not found for collection:" << query.collection;
+            m_databases.erase(query.col);   
+            qWarning() << "Collection not found for collection:" << query.col;
             return doc.toJson(QJsonDocument::Compact);
         }
-        database->clearDocument(query.key);
+        database->clearDocument(query.doc);
         
         if (database->isEmpty())
         {
-            qInfo() << "Deleting collection (2) since there are no more documents:" << query.collection;
-            m_databases.erase(query.collection);
+            qInfo() << "Deleting collection (2) since there are no more documents:" << query.col;
+            m_databases.erase(query.col);
         }
     }
     return doc.toJson(QJsonDocument::Compact);
@@ -433,9 +438,9 @@ QString WebSocket::handleDeleteCollection(QWebSocket *client, const MessageReque
         client->close();
         return "";
     }
-    if (m_databases.find(query.collection) != m_databases.end())
+    if (m_databases.find(query.col) != m_databases.end())
     {
-        m_databases.erase(query.collection);
+        m_databases.erase(query.col);
     }
 
     QJsonObject obj;
@@ -458,12 +463,12 @@ QString WebSocket::handleDeleteRecord(QWebSocket *client, const MessageRequest &
     obj["id"] = message.id;
     QJsonDocument doc(obj);
 
-    auto database = m_databases[query.collection].get();
+    auto database = m_databases[query.col].get();
     if (database == nullptr)
-    {        m_databases.erase(query.collection);
+    {        m_databases.erase(query.col);
         return doc.toJson(QJsonDocument::Compact);
     }
-    database->deleteRecord(query.key, query.ts);    
+    database->deleteRecord(query.doc, query.ts);    
     return doc.toJson(QJsonDocument::Compact);
 }
 
@@ -483,14 +488,39 @@ QString WebSocket::handleDeleteMultipleRecords(QWebSocket *client, const Message
     QJsonDocument doc(obj);
     foreach (const DeleteRecord &record, query.records)
     {
-        auto database = m_databases[record.collection].get();
+        auto database = m_databases[record.col].get();
         if (database == nullptr)
         {
-            m_databases.erase(record.collection);   
+            m_databases.erase(record.col);   
         } else {
-            database->deleteRecord(record.key, record.ts);
+            database->deleteRecord(record.doc, record.ts);
         }
     }
+    return doc.toJson(QJsonDocument::Compact);
+}
+
+QString WebSocket::handleDeleteRecordsRange(QWebSocket *client, const MessageRequest &message)
+{
+    bool ok;
+    DeleteRecordsRange query = DeleteRecordsRange::fromJson(message.data, &ok);
+    if (!ok || !query.isValid())
+    {
+        qWarning() << "Invalid delete records range message format from" << client->peerAddress().toString();
+        client->close();
+        return "";
+    }
+    
+    QJsonObject obj;
+    obj["id"] = message.id;
+    QJsonDocument doc(obj);
+
+    auto database = m_databases[query.col].get();
+    if (database == nullptr)
+    {
+        m_databases.erase(query.col);
+        return doc.toJson(QJsonDocument::Compact);
+    }
+    database->deleteRecordsInRange(query.doc, query.fromTs, query.toTs);
     return doc.toJson(QJsonDocument::Compact);
 }
 
@@ -505,7 +535,7 @@ QString WebSocket::handleSetValue(QWebSocket *client, const MessageRequest &mess
         return "";
     }
 
-    auto collection = kv.collection;
+    auto collection = kv.col;
     auto database = m_databases[collection].get();
     if (database == nullptr)
     {
@@ -536,7 +566,7 @@ QString WebSocket::handleGetValue(QWebSocket *client, const MessageRequest &mess
     obj["id"] = message.id;
     obj["value"] = "";
 
-    auto collection = kv.collection;
+    auto collection = kv.col;
     auto database = m_databases[collection].get();
     
     if (database == nullptr) {
@@ -559,7 +589,7 @@ QString WebSocket::handleRemoveValue(QWebSocket *client, const MessageRequest &m
         return "";
     }
 
-    auto collection = kv.collection;
+    auto collection = kv.col;
     auto database = m_databases[collection].get();
     if (database == nullptr) {
         m_databases.erase(collection);        
@@ -584,7 +614,7 @@ QString WebSocket::handleGetAllValues(QWebSocket *client, const MessageRequest &
         return "";
     }
 
-    auto collection = kv.collection;
+    auto collection = kv.col;
     auto database = m_databases[collection].get();
     QJsonObject valuesObj;
     
@@ -616,7 +646,7 @@ QString WebSocket::handleGetAllKeys(QWebSocket *client, const MessageRequest &me
         return "";
     }
 
-    auto collection = kv.collection;
+    auto collection = kv.col;
     auto database = m_databases[collection].get();
     QJsonArray keysArray;
     
@@ -743,7 +773,7 @@ WebSocket::RequiredPermission WebSocket::permissionForType(const QString &type) 
     }
     if (type == MessageType::DeleteDocument || type == MessageType::DeleteCollection ||
         type == MessageType::DeleteRecord || type == MessageType::DeleteMultipleRecords ||
-        type == MessageType::RemoveValue)
+        type == MessageType::DeleteRecordsRange || type == MessageType::RemoveValue)
     {
         return RequiredPermission::Delete;
     }

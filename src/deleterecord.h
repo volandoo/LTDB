@@ -4,8 +4,8 @@
 #include <QString>
 #include <QJsonObject>
 struct DeleteRecord {
-    QString key;
-    QString collection;
+    QString doc;
+    QString col;
     qint64 ts;
     
     static DeleteRecord fromJson(const QString& jsonString, bool* ok = nullptr);

@@ -8,8 +8,8 @@ struct QueryDocument {
     qint64 to;
     qint64 limit;
     bool reverse;
-    QString key;
-    QString collection;
+    QString doc;
+    QString col;
 
     
     static QueryDocument fromJson(const QString& jsonString, bool* ok = nullptr);

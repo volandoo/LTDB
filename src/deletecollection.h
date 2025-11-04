@@ -4,7 +4,7 @@
 #include <QString>
 
 struct DeleteCollection {
-    QString collection;
+    QString col;
     
     static DeleteCollection fromJson(const QString& jsonString, bool* ok = nullptr);
     bool isValid() const;

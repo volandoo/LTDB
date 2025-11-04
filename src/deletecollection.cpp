@@ -23,12 +23,12 @@ DeleteCollection DeleteCollection::fromJson(const QString& jsonString, bool* ok)
     }
 
     QJsonObject obj = doc.object();
-    query.collection = obj["collection"].toString();
+    query.col = obj["col"].toString();
     if (ok) *ok = query.isValid();
     return query;
 }
 
 bool DeleteCollection::isValid() const
 {
-    return !collection.isEmpty();
+    return !col.isEmpty();
 } 

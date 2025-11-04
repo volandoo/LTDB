@@ -7,6 +7,7 @@ import {
     InsertMessageResponse,
     QueryCollectionResponse,
     DeleteRecord,
+    DeleteRecordsRange,
     SetValueParams,
     GetValueParams,
     KeyValueResponse,
@@ -32,6 +33,7 @@ const MESSAGE_TYPES = {
     DELETE_COLLECTION: "dcol",
     DELETE_RECORD: "drec",
     DELETE_MULTIPLE_RECORDS: "dmrec",
+    DELETE_RECORDS_RANGE: "drrng",
     SET_VALUE: "sval",
     GET_VALUE: "gval",
     REMOVE_VALUE: "rval",
@@ -50,7 +52,7 @@ type WebSocketMessage = {
     data: string;
 };
 
-class FluxionDBClient {
+class Client {
     private ws: WebSocket | null = null;
     private readonly url: string;
     private inflightRequests: { [id: string]: (response: any) => void; } = {};
@@ -285,7 +287,7 @@ class FluxionDBClient {
     public async deleteCollection(params: DeleteCollectionParams) {
         await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_COLLECTION,
-            data: JSON.stringify({ collection: params.collection }),
+            data: JSON.stringify(params),
         });
     }
 
@@ -296,7 +298,7 @@ class FluxionDBClient {
     public async fetchLatestRecords(params: FetchLatestRecordsParams) {
         const resp = await this.send<QueryResponse>({
             type: MESSAGE_TYPES.QUERY_RECORDS,
-            data: JSON.stringify({ collection: params.collection, ts: params.ts, key: params.key || "", from: params.from || 0 }),
+            data: JSON.stringify({ col: params.col, ts: params.ts, doc: params.doc || "", from: params.from || 0 }),
         });
         return resp.records;
     }
@@ -334,6 +336,13 @@ class FluxionDBClient {
     public async deleteMultipleRecords(params: DeleteRecord[]) {
         await this.send<InsertMessageResponse>({
             type: MESSAGE_TYPES.DELETE_MULTIPLE_RECORDS,
+            data: JSON.stringify(params),
+        });
+    }
+
+    public async deleteRecordsRange(params: DeleteRecordsRange) {
+        await this.send<InsertMessageResponse>({
+            type: MESSAGE_TYPES.DELETE_RECORDS_RANGE,
             data: JSON.stringify(params),
         });
     }
@@ -400,4 +409,4 @@ class FluxionDBClient {
     }
 }
 
-export default FluxionDBClient;
+export default Client;

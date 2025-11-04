@@ -5,9 +5,9 @@
 #include <QList>
 struct InsertRequest {
     qint64 ts;
-    QString key;
+    QString doc;
     QString data;
-    QString collection;
+    QString col;
     
     static QList<InsertRequest> fromJson(const QString& jsonString, bool* ok = nullptr);
     bool isValid() const;

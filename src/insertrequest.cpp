@@ -34,9 +34,9 @@ QList<InsertRequest> InsertRequest::fromJson(const QString& jsonString, bool* ok
         QJsonObject obj = value.toObject();
         InsertRequest payload;
         payload.ts = obj["ts"].toVariant().toLongLong();
-        payload.key = obj["key"].toString();
+        payload.doc = obj["doc"].toString();
         payload.data = obj["data"].toString();
-        payload.collection = obj["collection"].toString();
+        payload.col = obj["col"].toString();
         payloads.append(payload);
     }
 
@@ -46,5 +46,5 @@ QList<InsertRequest> InsertRequest::fromJson(const QString& jsonString, bool* ok
 
 bool InsertRequest::isValid() const
 {
-    return ts > 0 && !key.isEmpty() && !data.isEmpty() && !collection.isEmpty();
+    return ts > 0 && !doc.isEmpty() && !data.isEmpty() && !col.isEmpty();
 } 

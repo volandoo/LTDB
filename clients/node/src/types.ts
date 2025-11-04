@@ -1,8 +1,8 @@
 export type InsertMessageRequest = {
     ts: number;
-    key: string;
+    doc: string;
     data: string;
-    collection: string;
+    col: string;
 };
 
 export type ApiKeyScope = "readonly" | "read_write" | "read_write_delete";
@@ -74,23 +74,23 @@ export type KeyValueAllValuesResponse = {
 };
 
 export type CollectionParam = {
-    collection: string;
+    col: string;
 };
 
 export type FetchLatestRecordsParams = {
-    collection: string;
+    col: string;
     ts: number;
-    key?: string;
+    doc?: string;
     from?: number;
 };
 
 export type DeleteCollectionParams = {
-    collection: string;
+    col: string;
 };
 
 export type FetchRecordsParams = {
-    collection: string;
-    key: string;
+    col: string;
+    doc: string;
     from: number;
     to: number;
     limit?: number;
@@ -98,28 +98,35 @@ export type FetchRecordsParams = {
 };
 
 export type DeleteDocumentParams = {
-    key: string;
-    collection: string;
+    doc: string;
+    col: string;
 };
 
 export type DeleteRecord = {
-    key: string;
-    collection: string;
+    doc: string;
+    col: string;
     ts: number;
 };
 
+export type DeleteRecordsRange = {
+    doc: string;
+    col: string;
+    fromTs: number;
+    toTs: number;
+};
+
 export type SetValueParams = {
-    collection: string;
+    col: string;
     key: string;
     value: string;
 };
 
 export type GetValueParams = {
-    collection: string;
+    col: string;
     key: string;
 };
 
 export type DeleteValueParams = {
-    collection: string;
+    col: string;
     key: string;
 };

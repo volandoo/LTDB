@@ -63,9 +63,9 @@ func TestGenerateID(t *testing.T) {
 	}
 }
 
-func TestLTDBTypes(t *testing.T) {
-	// Test LTDBInsertMessageRequest
-	req := LTDBInsertMessageRequest{
+func TestTypes(t *testing.T) {
+	// Test InsertMessageRequest
+	req := InsertMessageRequest{
 		TS:         time.Now().Unix(),
 		Key:        "test-key",
 		Data:       `{"test": "data"}`,

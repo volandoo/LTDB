@@ -87,6 +87,7 @@ All requests are JSON documents. Clients authenticate during the WebSocket hands
 | `dcol`  | Delete a collection                      |
 | `drec`  | Delete a single record                   |
 | `dmrec` | Delete multiple records                  |
+| `drrng` | Delete records within a timestamp range  |
 | `sval`  | Set key-value entry                      |
 | `gval`  | Get key-value entry                      |
 | `rval`  | Remove key-value entry                   |
@@ -147,18 +148,18 @@ const client = new FluxionDBClient({ url: "ws://localhost:8080", apiKey: "YOUR_S
 
 const now = Math.floor(Date.now() / 1000);
 await client.insertMultipleDocumentRecords([
-    { ts: now, key: "device-1", data: JSON.stringify({ temperature: 22.5 }), collection: "sensors" },
+    { ts: now, doc: "device-1", data: JSON.stringify({ temperature: 22.5 }), col: "sensors" },
 ]);
 
 const collections = await client.fetchCollections();
 console.log(collections);
 
-const latest = await client.fetchLatestDocumentRecords({ collection: "sensors", ts: now });
+const latest = await client.fetchLatestDocumentRecords({ col: "sensors", ts: now });
 console.log(latest);
 
 const history = await client.fetchDocument({
-    collection: "sensors",
-    key: "device-1",
+    col: "sensors",
+    doc: "device-1",
     from: now - 3600,
     to: now,
 });
@@ -196,16 +197,16 @@ if err := client.Connect(); err != nil {
 defer client.Close()
 
 now := time.Now().Unix()
-_ = client.InsertSingleDocumentRecord(fluxiondb.LTDBInsertMessageRequest{
-    TS:         now,
-    Key:        "device-1",
-    Data:       `{"temperature":22.5}`,
-    Collection: "sensors",
+_ = client.InsertSingleDocumentRecord(fluxiondb.InsertMessageRequest{
+    TS:   now,
+    Doc:  "device-1",
+    Data: `{"temperature":22.5}`,
+    Col:  "sensors",
 })
 
-latest, _ := client.FetchLatestDocumentRecords(fluxiondb.LTDBFetchSessionsParams{
-    Collection: "sensors",
-    TS:         now,
+latest, _ := client.FetchLatestDocumentRecords(fluxiondb.FetchLatestRecordsParams{
+    Col: "sensors",
+    TS:  now,
 })
 
 fmt.Println(latest)

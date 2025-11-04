@@ -13,14 +13,14 @@ KeyValue KeyValue::fromJson(const QString& jsonString, bool* ok)
     QJsonObject obj = doc.object();
     kv.key = obj["key"].toString();
     kv.value = obj["value"].toString();
-    kv.collection = obj["collection"].toString();
+    kv.col = obj["col"].toString();
     if (ok) *ok = kv.isValid();
     return kv;
 }
 
 bool KeyValue::isValid() const
 {
-    return !collection.isEmpty();
+    return !col.isEmpty();
 }
 
 bool KeyValue::hasKey() const
