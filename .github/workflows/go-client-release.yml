@@ -1,0 +1,113 @@
+name: Go Client Release
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "clients/go/**"
+            - "!clients/go/README.md"
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v3
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Go
+              uses: actions/setup-go@v4
+              with:
+                  go-version: "1.21"
+
+            - name: Extract version from go.mod
+              id: version_check
+              run: |
+                  cd clients/go
+
+                  # Get the current git commit SHA
+                  COMMIT_SHA=$(git rev-parse --short HEAD)
+
+                  # Check if there are any go-client tags
+                  LATEST_TAG=$(git tag -l "go-client-v*" | sort -V | tail -n 1)
+
+                  if [ -z "$LATEST_TAG" ]; then
+                    # No tags exist, this is the first release
+                    NEW_VERSION="0.1.0"
+                    echo "has_changes=true" >> $GITHUB_OUTPUT
+                    echo "First release detected: v$NEW_VERSION"
+                  else
+                    # Get the commit of the latest tag
+                    TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG")
+                    
+                    # Check if there are changes in clients/go since the last tag
+                    CHANGES=$(git diff --name-only "$TAG_COMMIT" HEAD -- . | wc -l)
+                    
+                    if [ "$CHANGES" -gt 0 ]; then
+                      # Extract version and increment patch
+                      LATEST_VERSION="${LATEST_TAG#go-client-v}"
+                      IFS='.' read -r -a VERSION_PARTS <<< "$LATEST_VERSION"
+                      MAJOR="${VERSION_PARTS[0]}"
+                      MINOR="${VERSION_PARTS[1]}"
+                      PATCH="${VERSION_PARTS[2]}"
+                      NEW_PATCH=$((PATCH + 1))
+                      NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+                      echo "has_changes=true" >> $GITHUB_OUTPUT
+                      echo "Changes detected, incrementing version to v$NEW_VERSION"
+                    else
+                      NEW_VERSION="${LATEST_TAG#go-client-v}"
+                      echo "has_changes=false" >> $GITHUB_OUTPUT
+                      echo "No changes detected since v$NEW_VERSION"
+                    fi
+                  fi
+
+                  echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+            - name: Run tests
+              if: steps.version_check.outputs.has_changes == 'true'
+              run: |
+                  cd clients/go
+                  go test -v ./...
+
+            - name: Build example
+              if: steps.version_check.outputs.has_changes == 'true'
+              run: |
+                  cd clients/go/example
+                  go build -v .
+
+            - name: Create Git Tag
+              if: steps.version_check.outputs.has_changes == 'true'
+              run: |
+                  VERSION=${{ steps.version_check.outputs.version }}
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git tag -a "go-client-v$VERSION" -m "go client release v$VERSION"
+                  git tag -a "clients/go/v$VERSION" -m "go client release v$VERSION"
+                  git push origin "go-client-v$VERSION"
+                  git push origin "clients/go/v$VERSION"
+
+            - name: Create GitHub Release
+              if: steps.version_check.outputs.has_changes == 'true'
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: go-client-v${{ steps.version_check.outputs.version }}
+                  release_name: Go Client v${{ steps.version_check.outputs.version }}
+                  body: |
+                      Go client release v${{ steps.version_check.outputs.version }}
+
+                      Install via Go modules:
+                      ```bash
+                      go get github.com/volandoo/fluxiondb/clients/go@v${{ steps.version_check.outputs.version }}
+                      ```
+
+                      Or use the module path directly:
+                      ```go
+                      import "github.com/volandoo/fluxiondb/clients/go"
+                      ```
+                  draft: false
+                  prerelease: false

@@ -1,0 +1,90 @@
+name: Node Client Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'clients/node/**'
+      - '!clients/node/README.md'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check for version changes
+        id: version_check
+        run: |
+          cd clients/node
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if this version has been published before
+          if git tag | grep -q "node-client-v$CURRENT_VERSION"; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "Version $CURRENT_VERSION already released"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "New version $CURRENT_VERSION detected"
+          fi
+
+      - name: Setup Node.js
+        if: steps.version_check.outputs.has_changes == 'true'
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        if: steps.version_check.outputs.has_changes == 'true'
+        run: |
+          cd clients/node
+          npm ci
+
+      - name: Build
+        if: steps.version_check.outputs.has_changes == 'true'
+        run: |
+          cd clients/node
+          npm run build
+
+      - name: Publish to NPM
+        if: steps.version_check.outputs.has_changes == 'true'
+        run: |
+          cd clients/node
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create Git Tag
+        if: steps.version_check.outputs.has_changes == 'true'
+        run: |
+          VERSION=${{ steps.version_check.outputs.current_version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "node-client-v$VERSION" -m "node client release v$VERSION"
+          git push origin "node-client-v$VERSION"
+
+      - name: Create GitHub Release
+        if: steps.version_check.outputs.has_changes == 'true'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: node-client-v${{ steps.version_check.outputs.current_version }}
+          release_name: Node Client v${{ steps.version_check.outputs.current_version }}
+          body: |
+            Node.js client release v${{ steps.version_check.outputs.current_version }}
+            
+            Install via NPM:
+            ```bash
+            npm install @volandoo/fluxiondb-client@${{ steps.version_check.outputs.current_version }}
+            ```
+          draft: false
+          prerelease: false
+
