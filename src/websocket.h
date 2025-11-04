@@ -89,6 +89,8 @@ private:
     bool removeApiKey(const QString& key, QString* errorMessage = nullptr);
     bool parseScope(const QString& scopeString, ApiKeyScope* scopeOut) const;
     QString scopeToString(ApiKeyScope scope) const;
+    void saveApiKeysToDisk();
+    void loadApiKeysFromDisk();
 
     struct ApiKeyEntry {
         ApiKeyScope scope;

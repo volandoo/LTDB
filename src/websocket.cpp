@@ -42,6 +42,9 @@ WebSocket::WebSocket(const QString &masterKey, const QString &dataFolder, int fl
     m_flushTimer.start(flushIntervalSeconds * 1000);
     connect(&m_flushTimer, &QTimer::timeout, this, &WebSocket::flushToDisk);
 
+    // Load API keys from disk
+    loadApiKeysFromDisk();
+
     // get collections from data folder
     QDir dir(m_dataFolder);
     if (dir.exists())
@@ -770,10 +773,13 @@ bool WebSocket::registerApiKey(const QString &key, ApiKeyScope scope, bool delet
         deletableToStore = false;
     }
 
+    bool shouldPersist = false;
     auto it = m_apiKeys.find(key);
     if (it == m_apiKeys.end())
     {
         m_apiKeys.emplace(key, ApiKeyEntry{scopeToStore, deletableToStore});
+        // Persist all keys except the master key
+        shouldPersist = (key != m_masterKey);
     }
     else
     {
@@ -786,6 +792,8 @@ bool WebSocket::registerApiKey(const QString &key, ApiKeyScope scope, bool delet
         {
             it->second.deletable = deletableToStore;
         }
+        // Persist all keys except the master key
+        shouldPersist = (key != m_masterKey);
     }
 
     const QList<QWebSocket *> currentClients = m_clients;
@@ -801,6 +809,12 @@ bool WebSocket::registerApiKey(const QString &key, ApiKeyScope scope, bool delet
             m_clientScopes[clientSocket->objectName()] = scopeToStore;
         }
     }
+    
+    if (shouldPersist)
+    {
+        saveApiKeysToDisk();
+    }
+    
     if (errorMessage)
     {
         errorMessage->clear();
@@ -846,11 +860,107 @@ bool WebSocket::removeApiKey(const QString &key, QString *errorMessage)
         }
     }
 
+    // Save to disk after removing the key
+    saveApiKeysToDisk();
+
     if (errorMessage)
     {
         errorMessage->clear();
     }
     return true;
+}
+
+void WebSocket::saveApiKeysToDisk()
+{
+    if (m_dataFolder.isEmpty()) {
+        return; // Skip persistence if no data folder specified
+    }
+
+    QDir dir;
+    dir.mkpath(m_dataFolder + "/config");
+
+    QJsonObject apiKeysObj;
+    for (const auto& [key, entry] : m_apiKeys)
+    {
+        // Skip the master key - it should not be persisted
+        if (key == m_masterKey) {
+            continue;
+        }
+
+        QJsonObject entryObj;
+        entryObj["scope"] = scopeToString(entry.scope);
+        entryObj["deletable"] = entry.deletable;
+        apiKeysObj[key] = entryObj;
+    }
+
+    QJsonDocument doc(apiKeysObj);
+    QFile file(m_dataFolder + "/config/api_keys.json");
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        file.write(doc.toJson(QJsonDocument::Indented));
+        file.close();
+        qDebug() << "API keys saved to disk:" << apiKeysObj.keys().size() << "keys";
+    } else {
+        qWarning() << "Failed to save API keys to disk";
+    }
+}
+
+void WebSocket::loadApiKeysFromDisk()
+{
+    if (m_dataFolder.isEmpty()) {
+        return; // Skip if no data folder specified
+    }
+
+    QFile file(m_dataFolder + "/config/api_keys.json");
+    if (!file.exists()) {
+        qInfo() << "No API keys file found, starting with clean state";
+        return;
+    }
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Failed to open API keys file";
+        return;
+    }
+
+    QJsonParseError error;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &error);
+    file.close();
+
+    if (error.error != QJsonParseError::NoError) {
+        qWarning() << "Failed to parse API keys file:" << error.errorString();
+        return;
+    }
+
+    if (!doc.isObject()) {
+        qWarning() << "Invalid API keys file format";
+        return;
+    }
+
+    QJsonObject apiKeysObj = doc.object();
+    int loadedCount = 0;
+
+    for (auto it = apiKeysObj.begin(); it != apiKeysObj.end(); ++it)
+    {
+        QString key = it.key();
+        QJsonObject entryObj = it.value().toObject();
+
+        QString scopeString = entryObj["scope"].toString();
+        bool deletable = entryObj["deletable"].toBool();
+
+        ApiKeyScope scope;
+        if (!parseScope(scopeString, &scope)) {
+            qWarning() << "Invalid scope for API key, skipping:" << key;
+            continue;
+        }
+
+        QString errorMessage;
+        if (registerApiKey(key, scope, deletable, &errorMessage)) {
+            loadedCount++;
+        } else {
+            qWarning() << "Failed to load API key:" << key << errorMessage;
+        }
+    }
+
+    qInfo() << "Loaded" << loadedCount << "API keys from disk";
 }
 
 bool WebSocket::parseScope(const QString &scopeString, ApiKeyScope *scopeOut) const
