@@ -66,18 +66,18 @@ func TestGenerateID(t *testing.T) {
 func TestTypes(t *testing.T) {
 	// Test InsertMessageRequest
 	req := InsertMessageRequest{
-		TS:         time.Now().Unix(),
-		Key:        "test-key",
-		Data:       `{"test": "data"}`,
-		Collection: "test-collection",
+		TS:   time.Now().Unix(),
+		Doc:  "test-key",
+		Data: `{"test": "data"}`,
+		Col:  "test-collection",
 	}
 
-	if req.Key != "test-key" {
-		t.Errorf("Expected Key to be 'test-key', got '%s'", req.Key)
+	if req.Doc != "test-key" {
+		t.Errorf("Expected Doc to be 'test-key', got '%s'", req.Doc)
 	}
 
-	if req.Collection != "test-collection" {
-		t.Errorf("Expected Collection to be 'test-collection', got '%s'", req.Collection)
+	if req.Col != "test-collection" {
+		t.Errorf("Expected Col to be 'test-collection', got '%s'", req.Col)
 	}
 }
 

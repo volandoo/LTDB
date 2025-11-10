@@ -96,13 +96,32 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
+	log.Println("WebSocket connected, awaiting authentication...")
+
+	// Wait for the "ready" message from server to confirm authentication
+	var response map[string]interface{}
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	err = conn.ReadJSON(&response)
+	conn.SetReadDeadline(time.Time{}) // Clear deadline
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("authentication failed: %w", err)
+	}
+
+	msgType, ok := response["type"].(string)
+	if !ok || msgType != "ready" {
+		conn.Close()
+		return fmt.Errorf("authentication failed: expected ready message, got %v", response)
+	}
+
+	log.Println("Authentication successful")
+
 	c.conn = conn
 	c.reconnectAttempts = 0
 	c.isReconnecting = false
 
 	go c.readMessages()
 
-	log.Println("WebSocket connected")
 	return nil
 }
 
