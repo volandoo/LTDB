@@ -127,6 +127,8 @@ class Client {
 
         this.isConnecting = true;
         this.connectionPromise = new Promise<void>((resolve, reject) => {
+            let isAuthenticated = false; // Track if we received the "ready" message from server
+
             try {
                 // Append API key as query parameter instead of header
                 // (Qt 6.4 doesn't support reading custom headers from handshake)
@@ -139,14 +141,10 @@ class Client {
                 return;
             }
 
-            // Handle open event
+            // Handle open event - don't resolve yet, wait for "ready" message
             const onOpen = () => {
-                console.log("WebSocket connected");
-                this.isConnecting = false;
-                this.reconnectAttempts = 0;
-                this.isReconnecting = false;
-                this.shouldReconnect = true; // Enable auto-reconnect when connection is established
-                resolve();
+                console.log("WebSocket connected, awaiting authentication...");
+                // Don't resolve here - wait for server to send "ready" message
             };
 
             // Handle message event
@@ -164,6 +162,24 @@ class Client {
                             const reader = new FileReader();
                             reader.onload = () => {
                                 const text = reader.result as string;
+                                // Check if this is the ready message during connection
+                                if (!isAuthenticated && this.isConnecting) {
+                                    try {
+                                        const msg = JSON.parse(text);
+                                        if (msg.type === "ready") {
+                                            console.log("Authentication successful");
+                                            isAuthenticated = true;
+                                            this.isConnecting = false;
+                                            this.reconnectAttempts = 0;
+                                            this.isReconnecting = false;
+                                            this.shouldReconnect = true;
+                                            resolve();
+                                            return;
+                                        }
+                                    } catch (e) {
+                                        // Not JSON or not ready message, handle normally below
+                                    }
+                                }
                                 this.handleMessage(text);
                             };
                             reader.readAsText(data);
@@ -186,6 +202,27 @@ class Client {
                     })();
 
                     if (payload !== null) {
+                        // Check if this is the "ready" message from server during authentication
+                        if (!isAuthenticated && this.isConnecting) {
+                            console.log("Received message during authentication:", payload.substring(0, 100));
+                            try {
+                                const msg = JSON.parse(payload);
+                                console.log("Parsed message type:", msg.type);
+                                if (msg.type === "ready") {
+                                    console.log("Authentication successful");
+                                    isAuthenticated = true;
+                                    this.isConnecting = false;
+                                    this.reconnectAttempts = 0;
+                                    this.isReconnecting = false;
+                                    this.shouldReconnect = true;
+                                    resolve();
+                                    return; // Don't pass ready message to handleMessage
+                                }
+                            } catch (e) {
+                                console.log("Failed to parse message during auth:", e);
+                                // Not JSON or not ready message, handle normally
+                            }
+                        }
                         this.handleMessage(payload);
                     }
                 } catch (error) {
@@ -203,10 +240,13 @@ class Client {
                 this.connectionPromise = null; // Clear the promise on close/error
                 this.ws = null;
                 this.cleanupOnClose();
-                if (this.shouldReconnect) {
+
+                // If closed before authentication, it's an auth failure
+                if (!isAuthenticated) {
+                    reject(new Error(`Authentication failed: ${reasonText || `code ${code}`}`));
+                } else if (this.shouldReconnect) {
                     this.reconnect();
                 }
-                reject(new Error(`WebSocket closed: ${code} ${reasonText}`)); // Reject on close
             };
 
             // Handle error event
@@ -216,10 +256,13 @@ class Client {
                 this.connectionPromise = null; // Clear the promise on close/error
                 this.ws = null;
                 this.cleanupOnClose();
-                if (this.shouldReconnect) {
+
+                // If error before authentication, reject the connection promise
+                if (!isAuthenticated) {
+                    reject(error || new Error('WebSocket connection error'));
+                } else if (this.shouldReconnect) {
                     this.reconnect(); // Treat errors like a close event and attempt reconnect
                 }
-                reject(error); // Reject the promise on error.
             };
 
             // Attach event listeners based on environment

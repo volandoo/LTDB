@@ -128,6 +128,13 @@ void WebSocket::onNewConnection()
     connect(socket, &QWebSocket::textMessageReceived, this, &WebSocket::processMessage);
     connect(socket, &QWebSocket::disconnected, this, &WebSocket::socketDisconnected);
     m_clients << socket;
+
+    // Send authentication success message
+    QJsonObject readyMessage;
+    readyMessage["type"] = "ready";
+    readyMessage["message"] = "Authentication successful";
+    QJsonDocument doc(readyMessage);
+    socket->sendTextMessage(doc.toJson(QJsonDocument::Compact));
 }
 
 void WebSocket::processMessage(const QString &message)
