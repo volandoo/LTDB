@@ -46,6 +46,8 @@ describe('FluxionDBClient Integration', () => {
 
     beforeAll(async () => {
         const records = createMockData();
+        console.log('Connecting to:', url);
+        await client.connect();
         await client.deleteCollection({ col: testCollection });
         await client.insertMultipleRecords(records);
     }, 10000);

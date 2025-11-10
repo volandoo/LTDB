@@ -23,44 +23,7 @@ import {
     ManageApiKeyParams,
 } from "./types";
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-
 // Lazy load WebSocket implementation
-let WebSocketImpl: any = null;
-let wsLoadPromise: Promise<any> | null = null;
-
-async function getWebSocketImpl(): Promise<any> {
-    if (WebSocketImpl) {
-        return WebSocketImpl;
-    }
-
-    if (wsLoadPromise) {
-        return wsLoadPromise;
-    }
-
-    wsLoadPromise = (async () => {
-        if (isBrowser || typeof WebSocket !== 'undefined') {
-            // Browser or environment with global WebSocket
-            if (typeof WebSocket === 'undefined') {
-                throw new Error('Browser clients must use the native WebSocket object');
-            }
-            WebSocketImpl = WebSocket;
-            return WebSocket;
-        } else {
-            // Node.js - dynamically import ws
-            try {
-                const ws = await import('ws');
-                WebSocketImpl = ws.default || ws.WebSocket || ws;
-                return WebSocketImpl;
-            } catch (e) {
-                throw new Error('ws package is required for Node.js environments. Install it with: npm install ws');
-            }
-        }
-    })();
-
-    return wsLoadPromise;
-}
 
 const MESSAGE_TYPES = {
     INSERT: "ins",
@@ -102,17 +65,18 @@ class Client {
     private connectionPromise: Promise<void> | null = null; // Promise to track connection status
     private apiKey: string;
     private shouldReconnect: boolean = true; // Flag to track if reconnection should happen
+    private showLogs: boolean = false;
 
-    constructor({ url, apiKey }: { url: string; apiKey: string; }) {
+    constructor({ url, apiKey, showLogs = false }: { url: string; apiKey: string; showLogs?: boolean; }) {
         this.url = url;
         this.apiKey = apiKey;
+        this.showLogs = showLogs;
     }
 
     public async connect(): Promise<void> {
         // Load WebSocket implementation first
-        const WS = await getWebSocketImpl();
 
-        if (this.ws && this.ws.readyState === WS.OPEN) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             return;
         }
 
@@ -133,7 +97,13 @@ class Client {
                 // Append API key as query parameter instead of header
                 // (Qt 6.4 doesn't support reading custom headers from handshake)
                 const urlWithKey = `${this.url}${this.url.includes('?') ? '&' : '?'}api-key=${encodeURIComponent(this.apiKey)}`;
-                this.ws = new WS(urlWithKey);
+                if (this.showLogs) {
+                    console.log('Connecting to:', urlWithKey);
+                }
+                this.ws = new WebSocket(urlWithKey);
+                if (this.showLogs) {
+                    console.log('WebSocket created, readyState:', this.ws);
+                }
             } catch (error) {
                 this.isConnecting = false;
                 this.connectionPromise = null;
@@ -143,21 +113,23 @@ class Client {
 
             // Handle open event - don't resolve yet, wait for "ready" message
             const onOpen = () => {
-                console.log("WebSocket connected, awaiting authentication...");
+                if (this.showLogs) {
+                    console.log("WebSocket connected, awaiting authentication...");
+                }
                 // Don't resolve here - wait for server to send "ready" message
             };
 
             // Handle message event
-            const onMessage = (event: any) => {
+            const onMessage = (event: MessageEvent) => {
                 try {
                     // In browser, event is MessageEvent with event.data
                     // In Node.js ws, event is the data directly
-                    const data = isBrowser ? event.data : event;
+                    const data = event.data;
                     const payload = (() => {
                         if (typeof data === "string") {
                             return data;
                         }
-                        if (isBrowser && data instanceof Blob) {
+                        if (data instanceof Blob) {
                             // Handle Blob in browser (we'll read it as text)
                             const reader = new FileReader();
                             reader.onload = () => {
@@ -167,7 +139,9 @@ class Client {
                                     try {
                                         const msg = JSON.parse(text);
                                         if (msg.type === "ready") {
-                                            console.log("Authentication successful");
+                                            if (this.showLogs) {
+                                                console.log("Authentication successful");
+                                            }
                                             isAuthenticated = true;
                                             this.isConnecting = false;
                                             this.reconnectAttempts = 0;
@@ -186,17 +160,7 @@ class Client {
                             return null; // Skip processing below, will be handled in onload
                         }
                         if (data instanceof ArrayBuffer) {
-                            if (isBrowser) {
-                                return new TextDecoder().decode(data);
-                            } else {
-                                return Buffer.from(data).toString();
-                            }
-                        }
-                        if (!isBrowser && Array.isArray(data)) {
-                            return Buffer.concat(data).toString();
-                        }
-                        if (!isBrowser && typeof data.toString === 'function') {
-                            return data.toString();
+                            return new TextDecoder().decode(data);
                         }
                         return String(data);
                     })();
@@ -204,12 +168,18 @@ class Client {
                     if (payload !== null) {
                         // Check if this is the "ready" message from server during authentication
                         if (!isAuthenticated && this.isConnecting) {
-                            console.log("Received message during authentication:", payload.substring(0, 100));
+                            if (this.showLogs) {
+                                console.log("Received message during authentication:", payload.substring(0, 100));
+                            }
                             try {
                                 const msg = JSON.parse(payload);
-                                console.log("Parsed message type:", msg.type);
+                                if (this.showLogs) {
+                                    console.log("Parsed message type:", msg.type);
+                                }
                                 if (msg.type === "ready") {
-                                    console.log("Authentication successful");
+                                    if (this.showLogs) {
+                                        console.log("Authentication successful");
+                                    }
                                     isAuthenticated = true;
                                     this.isConnecting = false;
                                     this.reconnectAttempts = 0;
@@ -219,7 +189,9 @@ class Client {
                                     return; // Don't pass ready message to handleMessage
                                 }
                             } catch (e) {
-                                console.log("Failed to parse message during auth:", e);
+                                if (this.showLogs) {
+                                    console.log("Failed to parse message during auth:", e);
+                                }
                                 // Not JSON or not ready message, handle normally
                             }
                         }
@@ -231,11 +203,13 @@ class Client {
             };
 
             // Handle close event
-            const onClose = (event: any) => {
-                const code = isBrowser ? event.code : event;
-                const reason = isBrowser ? event.reason : (event ? String(event) : '');
+            const onClose = (event: CloseEvent) => {
+                const code = event.code;
+                const reason = event.reason ? String(event.reason) : '';
                 const reasonText = reason || "no reason";
-                console.log("WebSocket disconnected:", code, reasonText);
+                if (this.showLogs) {
+                    console.log("WebSocket disconnected:", code, reasonText);
+                }
                 this.isConnecting = false;
                 this.connectionPromise = null; // Clear the promise on close/error
                 this.ws = null;
@@ -271,18 +245,10 @@ class Client {
                 return;
             }
 
-            if (isBrowser) {
-                this.ws.addEventListener('open', onOpen);
-                this.ws.addEventListener('message', onMessage);
-                this.ws.addEventListener('close', onClose);
-                this.ws.addEventListener('error', onError);
-            } else {
-                // Node.js ws uses .on() method
-                (this.ws as any).on('open', onOpen);
-                (this.ws as any).on('message', onMessage);
-                (this.ws as any).on('close', onClose);
-                (this.ws as any).on('error', onError);
-            }
+            this.ws.addEventListener('open', onOpen);
+            this.ws.addEventListener('message', onMessage);
+            this.ws.addEventListener('close', onClose);
+            this.ws.addEventListener('error', onError);
         });
 
         return this.connectionPromise;
@@ -320,8 +286,7 @@ class Client {
             return Promise.reject(new Error("Failed to connect before sending: " + (error as Error).message)); // Reject send if connect fails.
         }
 
-        const WS = await getWebSocketImpl();
-        if (!this.ws || this.ws.readyState !== WS.OPEN) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             return Promise.reject(new Error("WebSocket not connected."));
         }
 
@@ -371,7 +336,7 @@ class Client {
 
         this.isReconnecting = true;
         this.reconnectAttempts++;
-        console.log(`Attempting to reconnect... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        console.warn(`Attempting to reconnect... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
         setTimeout(() => {
             this.connect();
