@@ -1,4 +1,3 @@
-import WebSocket, { RawData } from "ws";
 import {
     CollectionsResponse,
     FetchLatestRecordsParams,
@@ -23,6 +22,45 @@ import {
     RemoveApiKeyParams,
     ManageApiKeyParams,
 } from "./types";
+
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
+// Lazy load WebSocket implementation
+let WebSocketImpl: any = null;
+let wsLoadPromise: Promise<any> | null = null;
+
+async function getWebSocketImpl(): Promise<any> {
+    if (WebSocketImpl) {
+        return WebSocketImpl;
+    }
+
+    if (wsLoadPromise) {
+        return wsLoadPromise;
+    }
+
+    wsLoadPromise = (async () => {
+        if (isBrowser || typeof WebSocket !== 'undefined') {
+            // Browser or environment with global WebSocket
+            if (typeof WebSocket === 'undefined') {
+                throw new Error('Browser clients must use the native WebSocket object');
+            }
+            WebSocketImpl = WebSocket;
+            return WebSocket;
+        } else {
+            // Node.js - dynamically import ws
+            try {
+                const ws = await import('ws');
+                WebSocketImpl = ws.default || ws.WebSocket || ws;
+                return WebSocketImpl;
+            } catch (e) {
+                throw new Error('ws package is required for Node.js environments. Install it with: npm install ws');
+            }
+        }
+    })();
+
+    return wsLoadPromise;
+}
 
 const MESSAGE_TYPES = {
     INSERT: "ins",
@@ -71,7 +109,10 @@ class Client {
     }
 
     public async connect(): Promise<void> {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        // Load WebSocket implementation first
+        const WS = await getWebSocketImpl();
+
+        if (this.ws && this.ws.readyState === WS.OPEN) {
             return;
         }
 
@@ -90,7 +131,7 @@ class Client {
                 // Append API key as query parameter instead of header
                 // (Qt 6.4 doesn't support reading custom headers from handshake)
                 const urlWithKey = `${this.url}${this.url.includes('?') ? '&' : '?'}api-key=${encodeURIComponent(this.apiKey)}`;
-                this.ws = new WebSocket(urlWithKey);
+                this.ws = new WS(urlWithKey);
             } catch (error) {
                 this.isConnecting = false;
                 this.connectionPromise = null;
@@ -98,46 +139,65 @@ class Client {
                 return;
             }
 
-            this.ws.on("open", () => {
+            // Handle open event
+            const onOpen = () => {
                 console.log("WebSocket connected");
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
                 this.isReconnecting = false;
                 this.shouldReconnect = true; // Enable auto-reconnect when connection is established
                 resolve();
-            });
+            };
 
-            this.ws.on("message", (data: RawData) => {
+            // Handle message event
+            const onMessage = (event: any) => {
                 try {
+                    // In browser, event is MessageEvent with event.data
+                    // In Node.js ws, event is the data directly
+                    const data = isBrowser ? event.data : event;
                     const payload = (() => {
                         if (typeof data === "string") {
                             return data;
                         }
-                        if (data instanceof ArrayBuffer) {
-                            return Buffer.from(data).toString();
+                        if (isBrowser && data instanceof Blob) {
+                            // Handle Blob in browser (we'll read it as text)
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const text = reader.result as string;
+                                this.handleMessage(text);
+                            };
+                            reader.readAsText(data);
+                            return null; // Skip processing below, will be handled in onload
                         }
-                        if (Array.isArray(data)) {
+                        if (data instanceof ArrayBuffer) {
+                            if (isBrowser) {
+                                return new TextDecoder().decode(data);
+                            } else {
+                                return Buffer.from(data).toString();
+                            }
+                        }
+                        if (!isBrowser && Array.isArray(data)) {
                             return Buffer.concat(data).toString();
                         }
-                        return data.toString();
+                        if (!isBrowser && typeof data.toString === 'function') {
+                            return data.toString();
+                        }
+                        return String(data);
                     })();
-                    const response: WebSocketResponse = JSON.parse(payload);
-                    const callback = this.inflightRequests[response.id];
-                    if (callback) {
-                        callback(response);
-                        delete this.inflightRequests[response.id];
-                    } else if (response.error) {
-                        console.warn(`Received error response: ${response.error}`);
-                    } else {
-                        console.warn(`Received unexpected message with id: ${response.id}`, response);
+
+                    if (payload !== null) {
+                        this.handleMessage(payload);
                     }
                 } catch (error) {
                     console.error("Error parsing WebSocket message:", error);
                 }
-            });
+            };
 
-            this.ws.on("close", (code: number, reason: Buffer) => {
-                const reasonText = reason.toString() || "no reason";
+            // Handle close event
+            const onClose = (event: any) => {
+                const code = isBrowser ? event.code : event;
+                const reason = isBrowser ? event.reason : (event ? String(event) : '');
+                const reasonText = reason || "no reason";
                 console.log("WebSocket disconnected:", code, reasonText);
                 this.isConnecting = false;
                 this.connectionPromise = null; // Clear the promise on close/error
@@ -147,9 +207,10 @@ class Client {
                     this.reconnect();
                 }
                 reject(new Error(`WebSocket closed: ${code} ${reasonText}`)); // Reject on close
-            });
+            };
 
-            this.ws.on("error", (error: Error) => {
+            // Handle error event
+            const onError = (error: any) => {
                 console.error("WebSocket error:", error);
                 this.isConnecting = false;
                 this.connectionPromise = null; // Clear the promise on close/error
@@ -159,10 +220,42 @@ class Client {
                     this.reconnect(); // Treat errors like a close event and attempt reconnect
                 }
                 reject(error); // Reject the promise on error.
-            });
+            };
+
+            // Attach event listeners based on environment
+            if (!this.ws) {
+                reject(new Error('Failed to create WebSocket'));
+                return;
+            }
+
+            if (isBrowser) {
+                this.ws.addEventListener('open', onOpen);
+                this.ws.addEventListener('message', onMessage);
+                this.ws.addEventListener('close', onClose);
+                this.ws.addEventListener('error', onError);
+            } else {
+                // Node.js ws uses .on() method
+                (this.ws as any).on('open', onOpen);
+                (this.ws as any).on('message', onMessage);
+                (this.ws as any).on('close', onClose);
+                (this.ws as any).on('error', onError);
+            }
         });
 
         return this.connectionPromise;
+    }
+
+    private handleMessage(payload: string): void {
+        const response: WebSocketResponse = JSON.parse(payload);
+        const callback = this.inflightRequests[response.id];
+        if (callback) {
+            callback(response);
+            delete this.inflightRequests[response.id];
+        } else if (response.error) {
+            console.warn(`Received error response: ${response.error}`);
+        } else {
+            console.warn(`Received unexpected message with id: ${response.id}`, response);
+        }
     }
 
     private cleanupOnClose(): void {
@@ -184,7 +277,8 @@ class Client {
             return Promise.reject(new Error("Failed to connect before sending: " + (error as Error).message)); // Reject send if connect fails.
         }
 
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        const WS = await getWebSocketImpl();
+        if (!this.ws || this.ws.readyState !== WS.OPEN) {
             return Promise.reject(new Error("WebSocket not connected."));
         }
 
@@ -241,40 +335,6 @@ class Client {
             this.isReconnecting = false;
         }, this.reconnectInterval);
     }
-
-    /************************************************************
-    Database looks like this:
-    
-    where a collection is temperature, humidity, etc.
-    where a document is an array of records, identified by the device_id
-
-    {
-        "temperature": {
-            "device_id_1": [
-                { "ts": 1747604423, "data": { "temperature": 22.5 }
-                { "ts": 1747604424, "data": { "temperature": 22.6 }
-            ],
-            "device_id_2": [
-                { "ts": 1747604425, "data": { "temperature": 22.7 }
-                { "ts": 1747604426, "data": { "temperature": 22.8 }
-            ],
-            "device_id_3": [
-                { "ts": 1747604427, "data": { "temperature": 22.9 }
-                { "ts": 1747604428, "data": { "temperature": 23.0 }
-            ],
-        },
-        "humidity": {
-            "device_id_1": [
-                { "ts": 1747604423, "data": { "humidity": 45.5 }
-                { "ts": 1747604424, "data": { "humidity": 45.6 }
-            ],
-            "device_id_2": [
-                { "ts": 1747604425, "data": { "humidity": 45.7 }
-                { "ts": 1747604426, "data": { "humidity": 45.8 }
-            ],
-        }
-    }
-    ************************************************************/
 
     public async fetchCollections() {
         const resp = await this.send<CollectionsResponse>({

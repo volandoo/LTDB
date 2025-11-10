@@ -8,6 +8,42 @@ Official TypeScript/JavaScript client for FluxionDB (Live Time Series Database).
 npm install @volandoo/fluxiondb-client
 ```
 
+## Browser & Node.js Compatibility
+
+This client works in both Node.js and browser environments:
+
+- **Node.js**: Uses the `ws` WebSocket library (installed automatically)
+- **Browser**: Uses the native `WebSocket` API (no additional dependencies needed)
+
+The client automatically detects the environment and uses the appropriate WebSocket implementation.
+
+### Browser Usage
+
+```html
+<script type="module">
+  import FluxionDBClient from './node_modules/@volandoo/fluxiondb-client/dist/client.js';
+  
+  const client = new FluxionDBClient({
+    url: "wss://your-server.com",
+    apiKey: "YOUR_SECRET_KEY",
+  });
+  
+  await client.connect();
+  // ... use the client
+</script>
+```
+
+Or with a bundler (webpack, vite, etc.):
+
+```javascript
+import FluxionDBClient from "@volandoo/fluxiondb-client";
+
+const client = new FluxionDBClient({
+  url: "wss://your-server.com",
+  apiKey: "YOUR_SECRET_KEY",
+});
+```
+
 ## Usage
 
 ```typescript
