@@ -27,7 +27,7 @@ jobs:
         id: version_check
         run: |
           cd clients/node
-          CURRENT_VERSION=$(bun run -e "console.log(require('./package.json').version)")
+          CURRENT_VERSION=$(bun -e "console.log(require('./package.json').version)")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
           # Check if this version has been published before

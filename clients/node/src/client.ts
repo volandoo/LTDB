@@ -334,6 +334,7 @@ class Client {
 
     this.isReconnecting = true;
     this.reconnectAttempts++;
+
     if (this.reconnectAttempts > 1) {
       console.warn(
         `Attempting to reconnect... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
