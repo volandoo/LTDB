@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'clients/node/**'
-      - '!clients/node/README.md'
+      - "clients/node/**"
+      - "!clients/node/README.md"
 
 jobs:
   release:
@@ -18,13 +18,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
       - name: Check for version changes
         id: version_check
         run: |
           cd clients/node
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          CURRENT_VERSION=$(bun run -e "console.log(require('./package.json').version)")
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          
+
           # Check if this version has been published before
           if git tag | grep -q "node-client-v$CURRENT_VERSION"; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -34,32 +39,26 @@ jobs:
             echo "New version $CURRENT_VERSION detected"
           fi
 
-      - name: Setup Node.js
-        if: steps.version_check.outputs.has_changes == 'true'
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-
       - name: Install dependencies
         if: steps.version_check.outputs.has_changes == 'true'
         run: |
           cd clients/node
-          npm ci
+          bun install --frozen-lockfile
 
       - name: Build
         if: steps.version_check.outputs.has_changes == 'true'
         run: |
           cd clients/node
-          npm run build
+          bun run build
 
       - name: Publish to NPM
         if: steps.version_check.outputs.has_changes == 'true'
         run: |
           cd clients/node
-          npm publish
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          bun publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create Git Tag
         if: steps.version_check.outputs.has_changes == 'true'
@@ -80,11 +79,10 @@ jobs:
           release_name: Node Client v${{ steps.version_check.outputs.current_version }}
           body: |
             Node.js client release v${{ steps.version_check.outputs.current_version }}
-            
+
             Install via NPM:
             ```bash
             npm install @volandoo/fluxiondb-client@${{ steps.version_check.outputs.current_version }}
             ```
           draft: false
           prerelease: false
-
