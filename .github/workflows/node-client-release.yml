@@ -55,7 +55,7 @@ jobs:
         if: steps.version_check.outputs.has_changes == 'true'
         run: |
           cd clients/node
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           bun publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

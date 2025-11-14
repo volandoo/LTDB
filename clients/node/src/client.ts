@@ -331,7 +331,6 @@ class Client {
     ) {
       return; // Prevent concurrent reconnects and stop if max attempts reached
     }
-
     this.isReconnecting = true;
     this.reconnectAttempts++;
 
