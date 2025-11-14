@@ -68,7 +68,7 @@ type ClientOptions = {
 class Client {
   private ws: WebSocket | null = null;
   private readonly url: string;
-  private inflightRequests: { [id: string]: (response: any) => void } = {};
+  private inflightRequests: { [id: string]: (response: any) => void; } = {};
   private isConnecting: boolean = false; // Track if we're currently attempting to connect
   private isReconnecting: boolean = false; // Flag to prevent concurrent reconnect attempts
   private reconnectAttempts: number = 0;
@@ -334,10 +334,11 @@ class Client {
 
     this.isReconnecting = true;
     this.reconnectAttempts++;
-    console.warn(
-      `Attempting to reconnect... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
-    );
-
+    if (this.reconnectAttempts > 1) {
+      console.warn(
+        `Attempting to reconnect... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
+      );
+    }
     setTimeout(() => {
       this.connect();
       this.isReconnecting = false;
