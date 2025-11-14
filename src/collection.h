@@ -2,9 +2,10 @@
 #define COLLECTION_H
 
 #include <QString>
-#include <unordered_map>
-#include <vector>
 #include <QHash>
+#include <QRegularExpression>
+#include <vector>
+#include <unordered_map>
 #include <memory>
 #include "datarecord.h"
 
@@ -16,14 +17,14 @@ public:
     void insert(qint64 timestamp, const QString& key, const QString& data);
     DataRecord* getLatestRecordForDocument(const QString& key, qint64 timestamp);
     DataRecord* getEarliestRecordForDocument(const QString& key, qint64 timestamp);
-    QHash<QString, DataRecord*> getAllRecords(qint64 timestamp, const QString& key, qint64 from = 0);
+    QHash<QString, DataRecord*> getAllRecords(qint64 timestamp, const QString& key, qint64 from = 0, const QRegularExpression* keyRegex = nullptr);
     QList<DataRecord*> getAllRecordsForDocument(const QString& key, qint64 from, qint64 to, bool reverse = false, qint64 limit = 0);
     QHash<QString, QList<DataRecord*>> getSessionData(qint64 from, qint64 to);
     
     void setValueForKey(const QString& key, const QString& value);
     QString getValueForKey(const QString& key);
     void removeValueForKey(const QString& key);
-    QHash<QString, QString> getAllValues();
+    QHash<QString, QString> getAllValues(const QRegularExpression* keyRegex = nullptr);
     QList<QString> getAllKeys();
 
 

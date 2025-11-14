@@ -28,6 +28,7 @@ namespace MessageType {
     inline const QString DeleteRecordsRange = QStringLiteral("drrng");
     inline const QString SetValue = QStringLiteral("sval");
     inline const QString GetValue = QStringLiteral("gval");
+    inline const QString GetValues = QStringLiteral("gvalues");
     inline const QString RemoveValue = QStringLiteral("rval");
     inline const QString GetAllValues = QStringLiteral("gvals");
     inline const QString GetAllKeys = QStringLiteral("gkeys");
@@ -80,6 +81,7 @@ private:
     // key value
     QString handleSetValue(QWebSocket* client, const MessageRequest& message);
     QString handleGetValue(QWebSocket* client, const MessageRequest& message);
+    QString handleGetValues(QWebSocket* client, const MessageRequest& message);
     QString handleRemoveValue(QWebSocket* client, const MessageRequest& message);
     QString handleGetAllValues(QWebSocket* client, const MessageRequest& message);
     QString handleGetAllKeys(QWebSocket* client, const MessageRequest& message);

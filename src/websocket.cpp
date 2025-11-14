@@ -12,6 +12,7 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QWebSocketProtocol>
+#include <QRegularExpression>
 #include "insertrequest.h"
 #include "querysessions.h"
 #include "querydocument.h"
@@ -21,6 +22,77 @@
 #include "deleterecord.h"
 #include "deletemultiplerecords.h"
 #include "deleterecordsrange.h"
+
+namespace {
+
+bool tryParseRegexPattern(const QString &candidate, QRegularExpression *regexOut)
+{
+    if (candidate.size() < 2 || !candidate.startsWith('/'))
+    {
+        return false;
+    }
+
+    int closingSlashIndex = -1;
+    bool escaping = false;
+    for (int i = 1; i < candidate.size(); ++i)
+    {
+        const QChar ch = candidate.at(i);
+        if (!escaping && ch == '/')
+        {
+            closingSlashIndex = i;
+            break;
+        }
+
+        if (!escaping && ch == '\\')
+        {
+            escaping = true;
+            continue;
+        }
+
+        escaping = false;
+    }
+
+    if (closingSlashIndex == -1)
+    {
+        return false;
+    }
+
+    const QString pattern = candidate.mid(1, closingSlashIndex - 1);
+    const QString flags = candidate.mid(closingSlashIndex + 1);
+
+    QRegularExpression::PatternOptions options = QRegularExpression::NoPatternOption;
+    for (const QChar flag : flags)
+    {
+        if (flag == 'i')
+        {
+            options |= QRegularExpression::CaseInsensitiveOption;
+        }
+        else if (flag == 'm')
+        {
+            options |= QRegularExpression::MultilineOption;
+        }
+        else if (flag == 's')
+        {
+            options |= QRegularExpression::DotMatchesEverythingOption;
+        }
+    }
+
+    QRegularExpression regex(pattern, options);
+    if (!regex.isValid())
+    {
+        qWarning() << "Invalid regex pattern" << candidate << ":" << regex.errorString();
+        return false;
+    }
+
+    if (regexOut != nullptr)
+    {
+        *regexOut = regex;
+    }
+
+    return true;
+}
+
+} // namespace
 
 
 WebSocket::WebSocket(const QString &masterKey, const QString &dataFolder, int flushIntervalSeconds, QObject *parent) : QObject(parent)
@@ -233,6 +305,10 @@ void WebSocket::handleMessage(QWebSocket *client, const MessageRequest &message)
     {
         response = handleGetValue(client, message);
     }
+    else if (message.type == MessageType::GetValues)
+    {
+        response = handleGetValues(client, message);
+    }
     else if (message.type == MessageType::RemoveValue)
     {
         response = handleRemoveValue(client, message);
@@ -315,7 +391,9 @@ QString WebSocket::handleQuerySessions(QWebSocket *client, const MessageRequest 
         QJsonDocument doc(obj);
         return doc.toJson(QJsonDocument::Compact);
     }
-    auto records = database->getAllRecords(query.ts, query.doc, query.from);
+    QRegularExpression docRegex;
+    const bool useRegex = tryParseRegexPattern(query.doc, &docRegex);
+    auto records = database->getAllRecords(query.ts, useRegex ? QString() : query.doc, query.from, useRegex ? &docRegex : nullptr);
 
     foreach (const QString &key, records.keys())
     {
@@ -585,6 +663,51 @@ QString WebSocket::handleGetValue(QWebSocket *client, const MessageRequest &mess
     return doc.toJson(QJsonDocument::Compact);
 }
 
+QString WebSocket::handleGetValues(QWebSocket *client, const MessageRequest &message)
+{
+    bool ok;
+    KeyValue kv = KeyValue::fromJson(message.data, &ok);
+    if (!ok || !kv.isValid() || !kv.hasKey())
+    {
+        qWarning() << "Invalid get values message format from" << client->peerAddress().toString();
+        client->close();
+        return "";
+    }
+
+    QJsonObject obj;
+    obj["id"] = message.id;
+    QJsonObject valuesObj;
+
+    auto collection = kv.col;
+    auto database = m_databases[collection].get();
+
+    if (database == nullptr)
+    {
+        m_databases.erase(collection);
+    }
+    else
+    {
+        QRegularExpression keyRegex;
+        const bool useRegex = tryParseRegexPattern(kv.key, &keyRegex);
+        if (useRegex)
+        {
+            auto values = database->getAllValues(&keyRegex);
+            for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+            {
+                valuesObj[it.key()] = it.value();
+            }
+        }
+        else
+        {
+            valuesObj[kv.key] = database->getValueForKey(kv.key);
+        }
+    }
+
+    obj["values"] = valuesObj;
+    QJsonDocument doc(obj);
+    return doc.toJson(QJsonDocument::Compact);
+}
+
 QString WebSocket::handleRemoveValue(QWebSocket *client, const MessageRequest &message)
 {
     bool ok;
@@ -774,6 +897,7 @@ WebSocket::RequiredPermission WebSocket::permissionForType(const QString &type) 
     }
     if (type == MessageType::QuerySessions || type == MessageType::QueryCollections ||
         type == MessageType::QueryDocument || type == MessageType::GetValue ||
+        type == MessageType::GetValues ||
         type == MessageType::GetAllValues || type == MessageType::GetAllKeys)
     {
         return RequiredPermission::Read;

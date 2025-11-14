@@ -1,132 +1,134 @@
 export type InsertMessageRequest = {
-    ts: number;
-    doc: string;
-    data: string;
-    col: string;
+  ts: number;
+  doc: string;
+  data: string;
+  col: string;
 };
 
 export type ApiKeyScope = "readonly" | "read_write" | "read_write_delete";
 
 export type ManageApiKeyParams = {
-    action: "add" | "remove";
-    key: string;
-    scope?: ApiKeyScope;
+  action: "add" | "remove";
+  key: string;
+  scope?: ApiKeyScope;
 };
 
 export type AddApiKeyParams = {
-    key: string;
-    scope: ApiKeyScope;
+  key: string;
+  scope: ApiKeyScope;
 };
 
 export type RemoveApiKeyParams = {
-    key: string;
+  key: string;
 };
 
 export type ManageApiKeyResponse = {
-    id: string;
-    status?: string;
-    error?: string;
-    scope?: string;
+  id: string;
+  status?: string;
+  error?: string;
+  scope?: string;
 };
 
 export type InsertMessageResponse = {
-    id: string;
+  id: string;
 };
 
 export type QueryResponse = {
-    id: string;
-    records: {
-        [key: string]: {
-            ts: number;
-            data: string;
-        };
+  id: string;
+  records: {
+    [key: string]: {
+      ts: number;
+      data: string;
     };
+  };
 };
 
 export type QueryCollectionResponse = {
-    id: string;
-    records: {
-        ts: number;
-        data: string;
-    }[];
+  id: string;
+  records: {
+    ts: number;
+    data: string;
+  }[];
 };
 
 export type CollectionsResponse = {
-    id: string;
-    collections: string[];
+  id: string;
+  collections: string[];
 };
 
 // key value response
 
 export type KeyValueResponse = {
-    id: string;
-    value: string;
+  id: string;
+  value: string;
 };
 
 export type KeyValueAllKeysResponse = {
-    id: string;
-    keys: string[];
+  id: string;
+  keys: string[];
 };
 
 export type KeyValueAllValuesResponse = {
-    id: string;
-    values: { [key: string]: string; };
+  id: string;
+  values: { [key: string]: string };
 };
 
 export type CollectionParam = {
-    col: string;
+  col: string;
 };
 
 export type FetchLatestRecordsParams = {
-    col: string;
-    ts: number;
-    doc?: string;
-    from?: number;
+  col: string;
+  ts: number;
+  doc?: string;
+  from?: number;
 };
 
 export type DeleteCollectionParams = {
-    col: string;
+  col: string;
 };
 
 export type FetchRecordsParams = {
-    col: string;
-    doc: string;
-    from: number;
-    to: number;
-    limit?: number;
-    reverse?: boolean;
+  col: string;
+  doc: string;
+  from: number;
+  to: number;
+  limit?: number;
+  reverse?: boolean;
 };
 
 export type DeleteDocumentParams = {
-    doc: string;
-    col: string;
+  doc: string;
+  col: string;
 };
 
 export type DeleteRecord = {
-    doc: string;
-    col: string;
-    ts: number;
+  doc: string;
+  col: string;
+  ts: number;
 };
 
 export type DeleteRecordsRange = {
-    doc: string;
-    col: string;
-    fromTs: number;
-    toTs: number;
+  doc: string;
+  col: string;
+  fromTs: number;
+  toTs: number;
 };
 
 export type SetValueParams = {
-    col: string;
-    key: string;
-    value: string;
+  col: string;
+  key: string;
+  value: string;
 };
 
 export type GetValueParams = {
-    col: string;
-    key: string;
+  col: string;
+  key: string;
 };
 
+export type GetValuesParams = GetValueParams;
+
 export type DeleteValueParams = {
-    col: string;
-    key: string;
+  col: string;
+  key: string;
 };

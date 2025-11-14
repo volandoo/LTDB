@@ -122,19 +122,28 @@ DataRecord *Collection::getEarliestRecordForDocument(const QString &key, qint64 
     return it->second[index].get();
 }
 
-QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const QString &key, qint64 from)
+QHash<QString, DataRecord *> Collection::getAllRecords(qint64 timestamp, const QString &key, qint64 from, const QRegularExpression *keyRegex)
 {
     QHash<QString, DataRecord *> result;
-    if (key.isEmpty())
+    const bool hasRegex = keyRegex != nullptr && keyRegex->isValid();
+    if (hasRegex || key.isEmpty())
     {
-        for (const auto &[key, records] : m_data)
+        for (const auto &[docKey, records] : m_data)
         {
+            if (hasRegex && !keyRegex->match(docKey).hasMatch())
+            {
+                continue;
+            }
+            if (!key.isEmpty() && docKey != key)
+            {
+                continue;
+            }
             const int index = getLatestRecordIndex(records, timestamp);
             if (index != -1)
             {
                 auto record = records[index].get();
                 if (from == 0 || record->timestamp >= from) {
-                    result.insert(key, record);
+                    result.insert(docKey, record);
                 }
             }
         }
@@ -421,11 +430,16 @@ void Collection::removeValueForKey(const QString &key)
     m_key_vaue_updated = QDateTime::currentMSecsSinceEpoch();
 }
 
-QHash<QString, QString> Collection::getAllValues()
+QHash<QString, QString> Collection::getAllValues(const QRegularExpression *keyRegex)
 {
     QHash<QString, QString> result;
+    const bool hasRegex = keyRegex != nullptr && keyRegex->isValid();
     for (auto &[key, value] : m_key_vaue)
     {
+        if (hasRegex && !keyRegex->match(key).hasMatch())
+        {
+            continue;
+        }
         result.insert(key, QString::fromStdString(value));
     }
     return result;
