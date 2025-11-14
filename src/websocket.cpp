@@ -3,6 +3,7 @@
 #include <QList>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QJsonValue>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QDir>
@@ -176,6 +177,7 @@ void WebSocket::onNewConnection()
     const QUrl requestUrl = socket->requestUrl();
     const QUrlQuery query(requestUrl);
     const QString apiKey = query.queryItemValue("api-key");
+    const QString clientName = query.queryItemValue("name");
 
     if (apiKey.isEmpty())
     {
@@ -194,12 +196,14 @@ void WebSocket::onNewConnection()
 
     m_clientScopes[socket->objectName()] = entry->scope;
     m_clientKeys[socket->objectName()] = apiKey;
+    m_clientNames[socket->objectName()] = clientName;
 
     qInfo() << QTime::currentTime().toString() << "New client connected:" << socket->peerAddress().toString()
             << "ID" << socket->objectName() << "Scope" << scopeToString(entry->scope);
     connect(socket, &QWebSocket::textMessageReceived, this, &WebSocket::processMessage);
     connect(socket, &QWebSocket::disconnected, this, &WebSocket::socketDisconnected);
     m_clients << socket;
+    m_connectionTimes[socket->objectName()] = QDateTime::currentMSecsSinceEpoch();
 
     // Send authentication success message
     QJsonObject readyMessage;
@@ -324,6 +328,10 @@ void WebSocket::handleMessage(QWebSocket *client, const MessageRequest &message)
     else if (message.type == MessageType::ManageApiKey)
     {
         response = handleManageApiKey(client, message);
+    }
+    else if (message.type == MessageType::Connections)
+    {
+        response = handleConnections(client, message);
     }
     else
     {
@@ -797,6 +805,51 @@ QString WebSocket::handleGetAllKeys(QWebSocket *client, const MessageRequest &me
     return doc.toJson(QJsonDocument::Compact);
 }
 
+QString WebSocket::handleConnections(QWebSocket *client, const MessageRequest &message)
+{
+    QJsonObject obj;
+    obj["id"] = message.id;
+    QJsonArray connectionsArray;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    for (QWebSocket *socket : m_clients)
+    {
+        if (!socket)
+        {
+            continue;
+        }
+        QJsonObject connectionObj;
+        connectionObj["ip"] = socket->peerAddress().toString();
+        QString connectionName;
+        auto nameIt = m_clientNames.find(socket->objectName());
+        if (nameIt != m_clientNames.end())
+        {
+            connectionName = nameIt->second;
+        }
+        qint64 connectedAt = now;
+        auto it = m_connectionTimes.find(socket->objectName());
+        if (it != m_connectionTimes.end())
+        {
+            connectedAt = it->second;
+        }
+        connectionObj["since"] = now - connectedAt;
+        if (connectionName.isEmpty())
+        {
+            connectionObj["name"] = QJsonValue();
+        }
+        else
+        {
+            connectionObj["name"] = connectionName;
+        }
+        connectionObj["self"] = (socket == client);
+        connectionsArray.append(connectionObj);
+    }
+
+    obj["connections"] = connectionsArray;
+    QJsonDocument doc(obj);
+    return doc.toJson(QJsonDocument::Compact);
+}
+
 QString WebSocket::handleManageApiKey(QWebSocket *client, const MessageRequest &message)
 {
     auto clientKeyIt = m_clientKeys.find(client->objectName());
@@ -897,7 +950,7 @@ WebSocket::RequiredPermission WebSocket::permissionForType(const QString &type) 
     }
     if (type == MessageType::QuerySessions || type == MessageType::QueryCollections ||
         type == MessageType::QueryDocument || type == MessageType::GetValue ||
-        type == MessageType::GetValues ||
+        type == MessageType::GetValues || type == MessageType::Connections ||
         type == MessageType::GetAllValues || type == MessageType::GetAllKeys)
     {
         return RequiredPermission::Read;
@@ -1192,6 +1245,8 @@ void WebSocket::rejectClient(QWebSocket *socket, const QString &reason)
 
     m_clientScopes.erase(socket->objectName());
     m_clientKeys.erase(socket->objectName());
+    m_clientNames.erase(socket->objectName());
+    m_connectionTimes.erase(socket->objectName());
     m_clients.removeAll(socket);
     socket->close(QWebSocketProtocol::CloseCodePolicyViolated, reason.left(120));
     socket->deleteLater();
@@ -1206,6 +1261,8 @@ void WebSocket::socketDisconnected()
                  << client->peerAddress().toString() << "ID" << client->objectName();
         m_clientScopes.erase(client->objectName());
         m_clientKeys.erase(client->objectName());
+        m_clientNames.erase(client->objectName());
+        m_connectionTimes.erase(client->objectName());
         m_clients.removeAll(client);
         client->deleteLater();
     }

@@ -30,6 +30,14 @@ func main() {
 The client reconnects automatically if the socket drops, but calling `Connect()` explicitly during startup ensures the link is ready before issuing commands.
 The snippets below assume standard helpers such as `time`, `log`, and pointer utility functions are imported or defined in your application.
 
+## client.SetConnectionName(name)
+
+Optional helper to label the connection before calling `Connect()`. The value is sent as the `name` query parameter and is echoed back by `client.GetConnections()`. You can also call `fluxiondb.NewClientWithName(...)` to set the label during construction.
+
+```go
+client.SetConnectionName("go-test-suite")
+```
+
 ## client.Connect()
 
 Establishes the WebSocket session.
@@ -60,6 +68,24 @@ if err != nil {
 log.Println(collections)
 ```
 
+## client.GetConnections()
+
+Returns metadata about active WebSocket clients, including the caller.
+
+```go
+connections, err := client.GetConnections()
+if err != nil {
+	log.Fatalf("get connections: %v", err)
+}
+for _, conn := range connections {
+	name := "<unnamed>"
+	if conn.Name != nil && *conn.Name != "" {
+		name = *conn.Name
+	}
+	log.Printf("ip=%s since=%dms self=%t name=%s", conn.IP, conn.Since, conn.Self, name)
+}
+```
+
 ## client.DeleteCollection(params)
 
 Removes a collection and all of its documents.
@@ -74,7 +100,7 @@ if err := client.DeleteCollection(fluxiondb.DeleteCollectionParams{
 
 ## client.FetchLatestRecords(params)
 
-Retrieves the most recent record for every document in a collection, optionally scoping by document ID and minimum timestamp.
+Retrieves the most recent record for every document in a collection, optionally scoping by document ID and minimum timestamp. The `Doc` field accepts either a literal document name or a `/regex/` string (e.g. `/device-.*/`) to match multiple documents server-side.
 
 ```go
 latest, err := client.FetchLatestRecords(fluxiondb.FetchLatestRecordsParams{
@@ -87,6 +113,21 @@ if err != nil {
 	log.Fatalf("fetch latest: %v", err)
 }
 log.Printf("device-a: %s", latest["device-a"].Data)
+```
+## client.GetValues(params)
+
+Fetches key/value entries for an entire collection when `Key` is nil, or filters by literal/`/regex/` key when it is provided.
+
+```go
+pattern := "/env\\..*/"
+configs, err := client.GetValues(fluxiondb.GetValuesParams{
+	Col: "config",
+	Key: &pattern,
+})
+if err != nil {
+	log.Fatalf("fetch configs: %v", err)
+}
+log.Println(configs)
 ```
 
 ## client.InsertMultipleRecords(items)

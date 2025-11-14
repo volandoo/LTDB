@@ -11,6 +11,7 @@ import (
 func main() {
 	// Create a new client
 	client := fluxiondb.NewClient("ws://localhost:8080", "my-secret-key")
+	client.SetConnectionName("go-example")
 
 	// Connect to the server
 	if err := client.Connect(); err != nil {
@@ -114,19 +115,41 @@ func main() {
 	}
 	fmt.Printf("✓ Keys in config Col: %v\n", keys)
 
-	// Example 6: Fetch sessions
+	// Inspect current connections
+	connections, err := client.GetConnections()
+	if err != nil {
+		log.Printf("Failed to fetch connections: %v", err)
+		return
+	}
+	for _, conn := range connections {
+		fmt.Printf("  Connection: %s since=%dms self=%t name=%s\n", conn.IP, conn.Since, conn.Self, *conn.Name)
+	}
+
+	// Example 6: Fetch sessions with regex filters
 	from := now - 3600
 	sessions, err := client.FetchLatestRecords(fluxiondb.FetchLatestRecordsParams{
 		Col:  "sensors",
 		TS:   now,
-		Doc:  "collection123",
+		Doc:  "/collection[0-9]+/",
 		From: &from,
 	})
 	if err != nil {
 		log.Printf("Failed to fetch sessions: %v", err)
 		return
 	}
-	fmt.Printf("✓ Fetched sessions for collection123: %d entries\n", len(sessions))
+	fmt.Printf("✓ Fetched sessions via regex: %d entries\n", len(sessions))
+
+	// Example 7: Regex key/value lookups
+	pattern := "/env\\..*/"
+	envConfigs, err := client.GetValues(fluxiondb.GetValuesParams{
+		Col: "config",
+		Key: &pattern,
+	})
+	if err != nil {
+		log.Printf("Failed to fetch env configs: %v", err)
+		return
+	}
+	fmt.Printf("✓ Env configs: %v\n", envConfigs)
 
 	fmt.Println("\n🎉 All examples completed successfully!")
 }

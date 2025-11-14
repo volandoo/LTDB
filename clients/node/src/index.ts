@@ -15,6 +15,8 @@ export type {
   KeyValueResponse,
   KeyValueAllKeysResponse,
   KeyValueAllValuesResponse,
+  ConnectionInfo,
+  ConnectionsResponse,
   CollectionParam,
   DeleteValueParams,
   InsertMessageRequest,

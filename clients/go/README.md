@@ -24,6 +24,7 @@ import (
 func main() {
     // Create a new client
     client := fluxiondb.NewClient("ws://localhost:8080", "YOUR_SECRET_KEY")
+    client.SetConnectionName("docs-example-go")
 
     // Connect to the server
     if err := client.Connect(); err != nil {
@@ -57,6 +58,14 @@ func main() {
     }
     fmt.Printf("Collections: %v\n", collections)
 
+    connections, err := client.GetConnections()
+    if err != nil {
+        log.Printf("Failed to fetch connections: %v", err)
+        return
+    }
+    fmt.Printf("Active connections: %v\n", connections)
+    fmt.Println("Connections include name labels when SetConnectionName is used.")
+
     // Fetch records for a document in a collection
     records, err := client.FetchDocument(fluxiondb.FetchRecordsParams{
         Col:  "sensors",
@@ -71,12 +80,12 @@ func main() {
 
     fmt.Printf("Records: %v\n", records)
 
-    // Fetch latest record per document
+    // Fetch latest record per document using /regex/ filters
     from := now - 3600
-    sessions, err := client.FetchLatestDocumentRecords(fluxiondb.FetchLatestRecordsParams{
+    sessions, err := client.FetchLatestRecords(fluxiondb.FetchLatestRecordsParams{
         Col:  "sensors",
         TS:   now,
-        Doc:  "device123",
+        Doc:  "/device[0-9]+/",
         From: &from,
     })
     if err != nil {
@@ -84,17 +93,31 @@ func main() {
         return
     }
     fmt.Printf("Latest records: %v\n", sessions)
+
+    // Fetch regex-based key/value pairs (omit Key to fetch entire collection)
+    pattern := "/env\\..*/"
+    envConfigs, err := client.GetValues(fluxiondb.GetValuesParams{
+        Col: "config",
+        Key: &pattern,
+    })
+    if err != nil {
+        log.Printf("Failed to fetch env configs: %v", err)
+        return
+    }
+fmt.Printf("Env configs: %v\n", envConfigs)
 }
 ```
+
+> Prefer a single call? Use `fluxiondb.NewClientWithName(url, apiKey, "my-name")` to set the connection label up front.
 
 ## API Reference
 
 ### Time Series Methods
 
 -   `InsertSingleDocumentRecord(record InsertMessageRequest) error` - Insert a single record into a document
--   `InsertMultipleDocumentRecords(records []InsertMessageRequest) error` - Insert multiple records into a document
+-   `InsertMultipleRecords(records []InsertMessageRequest) error` - Insert multiple records into a document
 -   `FetchDocument(params FetchRecordsParams) ([]RecordResponse, error)` - Fetch records for a specific document
--   `FetchLatestDocumentRecords(params FetchLatestRecordsParams) (map[string]RecordResponse, error)` - Fetch the latest record per document in a collection
+-   `FetchLatestRecords(params FetchLatestRecordsParams) (map[string]RecordResponse, error)` - Fetch the latest record per document in a collection
 -   `DeleteDocument(params DeleteDocumentParams) error` - Delete a document (optionally across collections)
 -   `DeleteDocumentRecord(params DeleteRecord) error` - Delete a single record within a document
 -   `DeleteMultipleRecords(params []DeleteRecord) error` - Delete multiple records within documents
@@ -105,12 +128,17 @@ func main() {
 -   `FetchCollections() ([]string, error)` - Get all collections
 -   `DeleteCollection(params DeleteCollectionParams) error` - Delete a collection
 
+### Connection Insights
+
+-   `SetConnectionName(name string)` - Tag the connection; echoed in `GetConnections`
+-   `GetConnections() ([]ConnectionInfo, error)` - List active WebSocket clients (IP, elapsed ms, label, and whether it's the caller)
+
 ### Key-Value Methods
 
 -   `SetValue(params SetValueParams) error` - Set a key-value pair
 -   `GetValue(params GetValueParams) (string, error)` - Get a value by key
+-   `GetValues(params GetValuesParams) (map[string]string, error)` - Fetch key-value pairs for an entire collection or filter by literal/`/regex/` key
 -   `GetKeys(params CollectionParam) ([]string, error)` - Get all keys in a collection
--   `GetValues(params CollectionParam) (map[string]string, error)` - Get all key-value pairs in a collection
 -   `DeleteValue(params DeleteValueParams) error` - Delete a key-value pair
 
 ### API Key Management

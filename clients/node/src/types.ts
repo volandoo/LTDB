@@ -73,6 +73,18 @@ export type KeyValueAllValuesResponse = {
   values: { [key: string]: string };
 };
 
+export type ConnectionInfo = {
+  ip: string;
+  since: number;
+  self: boolean;
+  name?: string | null;
+};
+
+export type ConnectionsResponse = {
+  id: string;
+  connections: ConnectionInfo[];
+};
+
 export type CollectionParam = {
   col: string;
 };
@@ -126,7 +138,10 @@ export type GetValueParams = {
   key: string;
 };
 
-export type GetValuesParams = GetValueParams;
+export type GetValuesParams = {
+  col: string;
+  key?: string;
+};
 
 export type DeleteValueParams = {
   col: string;

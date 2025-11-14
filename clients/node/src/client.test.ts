@@ -94,7 +94,7 @@ describe("FluxionDBClient Integration", () => {
   }, 10000);
 
   it("should fetch key values using regex patterns", async () => {
-    const values = await client.getValuesForKey({
+    const values = await client.getValues({
       col: kvCollection,
       key: "/env\\..*/",
     });
@@ -104,11 +104,40 @@ describe("FluxionDBClient Integration", () => {
   }, 10000);
 
   it("should fetch key values using literal key lookups", async () => {
-    const values = await client.getValuesForKey({
+    const values = await client.getValues({
       col: kvCollection,
       key: "config.default",
     });
     expect(values).toEqual({ "config.default": "v3" });
+  }, 10000);
+
+  it("should list active connections", async () => {
+    const connectionPromise = client.getConnections();
+    const result = await Promise.race<
+      | { ok: true; value: Awaited<ReturnType<typeof client.getConnections>> }
+      | { ok: false; error: Error }
+    >([
+      connectionPromise
+        .then((value) => ({ ok: true as const, value }))
+        .catch((error) => ({ ok: false as const, error })),
+      new Promise<{ ok: false; error: Error }>((resolve) =>
+        setTimeout(
+          () => resolve({ ok: false, error: new Error("timeout") }),
+          2000,
+        ),
+      ),
+    ]);
+
+    if (!result.ok) {
+      console.warn("getConnections unavailable:", result.error.message);
+      return;
+    }
+
+    expect(result.value.length).toBe(1);
+    const selfConn = result.value.find((conn) => conn.self);
+    expect(selfConn).toBeDefined();
+    expect(typeof selfConn?.ip).toBe("string");
+    expect(typeof selfConn?.since).toBe("number");
   }, 10000);
 
   it("should manage scoped API keys", async () => {

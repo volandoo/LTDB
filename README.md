@@ -4,7 +4,7 @@ FluxionDB is an in-memory time series database exposed over WebSockets. The serv
 
 ## Highlights
 
--   Millisecond inserts and queries backed by an in-memory collection store
+-   Sub-millisecond inserts and queries backed by an in-memory collection store
 -   Compact WebSocket protocol with query-parameter auth and tokenised message types (`ins`, `qry`, …)
 -   Optional persistence when a data folder is supplied
 -   First-party clients:
@@ -23,12 +23,9 @@ FluxionDB is an in-memory time series database exposed over WebSockets. The serv
 docker pull volandoo/fluxiondb:latest
 
 # Run the server
-docker run --init --rm -it \
-  -p 8080:8080 \
-  -v $(pwd)/tmp_data:/app/data \
-  volandoo/fluxiondb:latest \
-  --secret-key=YOUR_SECRET_KEY \
-  --data=/app/data
+docker run --init --rm -it -p 8080:8080 \
+    -v $(pwd)/tmp_data:/app/data volandoo/fluxiondb:latest \
+    --secret-key=YOUR_SECRET_KEY --data=/app/data
 ```
 
 To build the image from source:
@@ -53,47 +50,33 @@ Arguments:
 
 ---
 
-### Helm Chart
-
-FluxionDB ships with a Helm chart under `deploy/helm/fluxiondb`. To install it from the repository root:
-
-```sh
-helm install fluxiondb ./deploy/helm/fluxiondb \
-  --set secret.secretKey=YOUR_SECRET_KEY \
-  --set persistence.enabled=true
-```
-
-Key values you may want to override:
-
--   `secret.secretKey` – master key used for client authentication (required).
--   `image.tag` – pin to a specific FluxionDB image digest or tag.
--   `persistence.*` – control volume size, storage class, or use an existing claim.
-
-Set `ingress.enabled=true` and configure `ingress.hosts`/`ingress.tls` to expose the WebSocket service externally.
-
----
-
 ## WebSocket Protocol Overview
 
 All requests are JSON documents. Clients authenticate during the WebSocket handshake by providing an `api-key` query parameter in the connection URL (e.g., `ws://localhost:8080?api-key=YOUR_KEY`). Supply the master key for full access, or a scoped key that you created with the `keys` management message. The legacy `auth` message is no longer accepted by the server.
 
-| Type    | Purpose                                  |
-| ------- | ---------------------------------------- |
-| `ins`   | Insert one or more records               |
-| `qry`   | Fetch latest record per document         |
-| `cols`  | List collections                         |
-| `qdoc`  | Fetch records for a document             |
-| `ddoc`  | Delete a document                        |
-| `dcol`  | Delete a collection                      |
-| `drec`  | Delete a single record                   |
-| `dmrec` | Delete multiple records                  |
-| `drrng` | Delete records within a timestamp range  |
-| `sval`  | Set key-value entry                      |
-| `gval`  | Get key-value entry                      |
-| `rval`  | Remove key-value entry                   |
-| `gvals` | Fetch all key-value entries              |
-| `gkeys` | Fetch all keys                           |
-| `keys`  | Manage API keys (add/remove scoped keys) |
+| Type      | Purpose                                           |
+| --------- | ------------------------------------------------- |
+| `ins`     | Insert one or more records                        |
+| `qry`     | Fetch latest record per document                  |
+| `cols`    | List collections                                  |
+| `qdoc`    | Fetch records for a document                      |
+| `ddoc`    | Delete a document                                 |
+| `dcol`    | Delete a collection                               |
+| `drec`    | Delete a single record                            |
+| `dmrec`   | Delete multiple records                           |
+| `drrng`   | Delete records within a timestamp range           |
+| `sval`    | Set key-value entry                               |
+| `gval`    | Get key-value entry                               |
+| `gvalues` | Get key-value entries by literal key or `/regex/` |
+| `rval`    | Remove key-value entry                            |
+| `gvals`   | Fetch all key-value entries                       |
+| `gkeys`   | Fetch all keys                                    |
+| `keys`    | Manage API keys (add/remove scoped keys)          |
+| `conn`    | List active client connections (IP, elapsed ms, optional name) |
+
+The `doc` field in `qry` requests and the `key` field in `gvalues` requests both accept `/pattern/flags` strings (e.g. `/device-.*/i`). Literal values continue to work as before; the server only compiles the expression when the payload starts with `/` and contains a trailing `/`.
+
+Clients may also include an optional `name` query parameter during the WebSocket handshake (`?api-key=...&name=my-sdk`). The server echoes that label in `conn` responses so you can tell which socket is which.
 
 ### API Key Scopes
 
@@ -141,20 +124,25 @@ npm install @volandoo/fluxiondb-client
 
 Example:
 
-```js
-import FluxionDBClient from "@volandoo/fluxiondb-client";
+```ts
+import { FluxionDBClient } from "@volandoo/fluxiondb-client";
 
 const client = new FluxionDBClient({ url: "ws://localhost:8080", apiKey: "YOUR_SECRET_KEY" });
 
 const now = Math.floor(Date.now() / 1000);
-await client.insertMultipleDocumentRecords([
+await client.insertMultipleRecords([
     { ts: now, doc: "device-1", data: JSON.stringify({ temperature: 22.5 }), col: "sensors" },
 ]);
 
 const collections = await client.fetchCollections();
 console.log(collections);
 
-const latest = await client.fetchLatestDocumentRecords({ col: "sensors", ts: now });
+// Match a subset of documents using /regex/ patterns
+const latest = await client.fetchLatestRecords({
+    col: "sensors",
+    ts: now,
+    doc: "/device-[12]/",
+});
 console.log(latest);
 
 const history = await client.fetchDocument({
@@ -165,7 +153,17 @@ const history = await client.fetchDocument({
 });
 console.log(history);
 
-await client.close();
+// Fetch key/value entries using a literal key or /regex/
+const envConfig = await client.getValues({
+    col: "config",
+    key: "/env\\..*/",
+});
+console.log(envConfig);
+
+const connections = await client.getConnections();
+console.log(connections);
+
+client.close();
 ```
 
 Scoped access can be provisioned at runtime:
@@ -174,6 +172,8 @@ Scoped access can be provisioned at runtime:
 await client.addApiKey({ key: "sensor-reader", scope: "readonly" });
 await client.removeApiKey({ key: "sensor-reader" });
 ```
+
+Call `client.getValues({ col })` to dump every key/value pair, or include `key` (literal or `/regex/`) to let the server filter before sending results.
 
 The full TypeScript source, tests, and build tooling live under `clients/node/`.
 
@@ -204,15 +204,27 @@ _ = client.InsertSingleDocumentRecord(fluxiondb.InsertMessageRequest{
     Col:  "sensors",
 })
 
-latest, _ := client.FetchLatestDocumentRecords(fluxiondb.FetchLatestRecordsParams{
+latest, _ := client.FetchLatestRecords(fluxiondb.FetchLatestRecordsParams{
     Col: "sensors",
     TS:  now,
+    Doc: "/device-[12]/",
 })
-
 fmt.Println(latest)
+
+pattern := "/env\\..*/"
+envVars, _ := client.GetValues(fluxiondb.GetValuesParams{
+    Col: "config",
+    Key: &pattern,
+})
+fmt.Println(envVars)
+
+connections, _ := client.GetConnections()
+fmt.Println(connections)
 ```
 
 See `clients/go/README.md` and the example app in `clients/go/example/` for more.
+
+Omit the `Key` pointer when calling `client.GetValues` to return the entire collection, or set it to a literal/`/regex/` string to reduce the payload.
 
 ---
 

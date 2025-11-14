@@ -26,16 +26,19 @@ const (
 	messageTypeDeleteRange      = "drrng"
 	messageTypeSetValue         = "sval"
 	messageTypeGetValue         = "gval"
+	messageTypeGetValues        = "gvalues"
 	messageTypeRemoveValue      = "rval"
 	messageTypeGetAllValues     = "gvals"
 	messageTypeGetAllKeys       = "gkeys"
 	messageTypeManageKeys       = "keys"
+	messageTypeConnections      = "conn"
 )
 
 // Client represents an  WebSocket client
 type Client struct {
 	url                  string
 	apiKey               string
+	connectionName       string
 	conn                 *websocket.Conn
 	inflightRequests     map[string]chan json.RawMessage
 	inflightMutex        sync.RWMutex
@@ -63,6 +66,18 @@ func NewClient(wsURL, apiKey string) *Client {
 	}
 }
 
+// NewClientWithName creates a new client and assigns a connection label
+func NewClientWithName(wsURL, apiKey, connectionName string) *Client {
+	client := NewClient(wsURL, apiKey)
+	client.connectionName = connectionName
+	return client
+}
+
+// SetConnectionName configures the name query parameter sent when connecting
+func (c *Client) SetConnectionName(name string) {
+	c.connectionName = name
+}
+
 // Connect establishes a WebSocket connection to the  server
 func (c *Client) Connect() error {
 	c.connectionMutex.Lock()
@@ -84,10 +99,13 @@ func (c *Client) Connect() error {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Append API key as query parameter instead of header
+	// Append API key (and optional connection name) as query parameters
 	// (Qt 6.4 doesn't support reading custom headers from handshake)
 	q := u.Query()
 	q.Set("api-key", c.apiKey)
+	if c.connectionName != "" {
+		q.Set("name", c.connectionName)
+	}
 	u.RawQuery = q.Encode()
 
 	dialer := websocket.DefaultDialer
@@ -304,6 +322,15 @@ func (c *Client) FetchCollections() ([]string, error) {
 	return response.Collections, nil
 }
 
+// GetConnections returns metadata about active connections
+func (c *Client) GetConnections() ([]ConnectionInfo, error) {
+	var response ConnectionsResponse
+	if err := c.send(messageTypeConnections, "{}", &response); err != nil {
+		return nil, err
+	}
+	return response.Connections, nil
+}
+
 // FetchLatestRecords fetches the latest records per document for a collection
 func (c *Client) FetchLatestRecords(params FetchLatestRecordsParams) (map[string]RecordResponse, error) {
 	data, err := json.Marshal(params)
@@ -446,16 +473,18 @@ func (c *Client) GetKeys(params CollectionParam) ([]string, error) {
 	return response.Keys, nil
 }
 
-// GetValues gets all values in a collection
-func (c *Client) GetValues(params CollectionParam) (map[string]string, error) {
+// GetValues fetches values for an entire collection or filters by optional key/regex
+func (c *Client) GetValues(params GetValuesParams) (map[string]string, error) {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return nil, err
 	}
-
 	var response KeyValueAllValuesResponse
-	err = c.send(messageTypeGetAllValues, string(data), &response)
-	if err != nil {
+	msgType := messageTypeGetAllValues
+	if params.Key != nil && *params.Key != "" {
+		msgType = messageTypeGetValues
+	}
+	if err = c.send(msgType, string(data), &response); err != nil {
 		return nil, err
 	}
 	return response.Values, nil

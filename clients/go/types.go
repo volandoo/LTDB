@@ -64,6 +64,20 @@ type CollectionsResponse struct {
 	Collections []string `json:"collections"`
 }
 
+// ConnectionInfo describes a connected client
+type ConnectionInfo struct {
+	IP    string  `json:"ip"`
+	Since int64   `json:"since"`
+	Self  bool    `json:"self"`
+	Name  *string `json:"name"`
+}
+
+// ConnectionsResponse represents the response for the conn message
+type ConnectionsResponse struct {
+	ID          string           `json:"id"`
+	Connections []ConnectionInfo `json:"connections"`
+}
+
 // KeyValueResponse represents a key-value response
 type KeyValueResponse struct {
 	ID    string `json:"id"`
@@ -142,6 +156,12 @@ type SetValueParams struct {
 type GetValueParams struct {
 	Col string `json:"col"`
 	Key string `json:"key"`
+}
+
+// GetValuesParams represents parameters for retrieving values via literal or regex keys
+type GetValuesParams struct {
+	Col string  `json:"col"`
+	Key *string `json:"key,omitempty"`
 }
 
 // DeleteValueParams represents parameters for deleting a value

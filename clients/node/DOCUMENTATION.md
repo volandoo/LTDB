@@ -8,6 +8,7 @@ import FluxionDBClient from "@volandoo/fluxiondb-client";
 const client = new FluxionDBClient({
     url: "ws://localhost:8080",
     apiKey: process.env.FLUXIONDB_API_KEY ?? "your-api-key",
+    connectionName: "docs-example", // optional label returned by getConnections()
 });
 
 await client.connect();
@@ -40,6 +41,16 @@ const collections = await client.fetchCollections();
 console.log(collections);
 ```
 
+## client.getConnections()
+
+Lists active WebSocket clients along with their IP address, optional `name`, milliseconds since they connected, and whether an entry corresponds to the caller.
+
+```ts
+const connections = await client.getConnections();
+const me = connections.find((conn) => conn.self);
+console.log(`Connected from ${me?.ip} for ${me?.since}ms as ${me?.name ?? "unnamed"}`);
+```
+
 ## client.deleteCollection(params)
 
 Deletes an entire collection and its documents.
@@ -50,13 +61,13 @@ await client.deleteCollection({ col: "temperature" });
 
 ## client.fetchLatestRecords(params)
 
-Retrieves the most recent record per document within a collection. Optionally scope by document ID and lower timestamp bound.
+Retrieves the most recent record per document within a collection. Optionally scope by document ID and lower timestamp bound. The `doc` field accepts literal identifiers or `/regex/flags` strings (e.g. `/device-.*/i`) to match multiple documents server-side.
 
 ```ts
 const latest = await client.fetchLatestRecords({
     col: "temperature",
     ts: Date.now(),
-    doc: "device-a", // optional
+    doc: "/device-.*/i", // literal value also supported
     from: Date.now() - 3600_000, // optional
 });
 console.log(latest["device-a"].data);
@@ -189,11 +200,18 @@ const keys = await client.getKeys({ col: "metadata" });
 
 ## client.getValues(params)
 
-Returns a map of all key/value pairs in a KV collection.
+Returns a map of key/value pairs in a KV collection. Omit `key` to retrieve everything, or supply a literal/`/regex/` string to narrow the results before they are sent back.
 
 ```ts
+// Fetch every entry
 const values = await client.getValues({ col: "metadata" });
-console.log(values["device-a:location"]);
+
+// Fetch only keys that match /env.*/
+const envValues = await client.getValues({
+    col: "metadata",
+    key: "/env\\..*/",
+});
+console.log(envValues["env.prod"]);
 ```
 
 ## client.deleteValue(params)
@@ -228,3 +246,4 @@ await client.removeApiKey({
     key: "readonly-device",
 });
 ```
+If you pass `connectionName` when instantiating the client, that label will appear in `client.getConnections()` responses so you can identify each socket.

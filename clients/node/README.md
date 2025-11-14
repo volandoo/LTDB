@@ -1,6 +1,6 @@
 # FluxionDB Node.js Client
 
-Official TypeScript/JavaScript client for FluxionDB (Live Time Series Database).
+Official TypeScript/JavaScript client for FluxionDB (In Memory Time Series Database).
 
 ## Installation
 
@@ -8,50 +8,17 @@ Official TypeScript/JavaScript client for FluxionDB (Live Time Series Database).
 npm install @volandoo/fluxiondb-client
 ```
 
-## Browser & Node.js Compatibility
-
-This client works in both Node.js and browser environments:
-
-- **Node.js**: Uses the `ws` WebSocket library (installed automatically)
-- **Browser**: Uses the native `WebSocket` API (no additional dependencies needed)
-
-The client automatically detects the environment and uses the appropriate WebSocket implementation.
-
-### Browser Usage
-
-```html
-<script type="module">
-  import FluxionDBClient from './node_modules/@volandoo/fluxiondb-client/dist/client.js';
-  
-  const client = new FluxionDBClient({
-    url: "wss://your-server.com",
-    apiKey: "YOUR_SECRET_KEY",
-  });
-  
-  await client.connect();
-  // ... use the client
-</script>
-```
-
-Or with a bundler (webpack, vite, etc.):
-
-```javascript
-import FluxionDBClient from "@volandoo/fluxiondb-client";
-
-const client = new FluxionDBClient({
-  url: "wss://your-server.com",
-  apiKey: "YOUR_SECRET_KEY",
-});
-```
+### Usage
 
 ## Usage
 
 ```typescript
-import FluxionDBClient from "@volandoo/fluxiondb-client";
+import { FluxionDBClient } from "@volandoo/fluxiondb-client";
 
 const client = new FluxionDBClient({
     url: "ws://localhost:8080",
     apiKey: "YOUR_SECRET_KEY",
+    connectionName: "docs-example",
 });
 
 await client.connect();
@@ -77,10 +44,11 @@ await client.insertMultipleRecords([
 const collections = await client.fetchCollections();
 console.log("Collections:", collections);
 
-// Fetch latest records for all documents in a collection
+// Fetch latest records for all documents in a collection (supports /regex/)
 const latest = await client.fetchLatestRecords({
     col: "sensors",
     ts: Date.now(),
+    doc: "/device-[12]/", // literal IDs also supported
 });
 console.log("Latest records:", latest);
 
@@ -92,6 +60,14 @@ const history = await client.fetchRecords({
     to: now,
 });
 console.log("History:", history);
+
+// Fetch key/value entries using literal keys or /regex/
+const env = await client.getValues({ col: "config", key: "/env\\..*/" });
+console.log(env);
+
+// Inspect active WebSocket connections (ip + ms since connected)
+const connections = await client.getConnections();
+console.log(connections);
 
 // Delete records within a timestamp range
 await client.deleteRecordsRange({
@@ -105,41 +81,44 @@ await client.deleteRecordsRange({
 await client.disconnect();
 ```
 
+> Tip: supply `connectionName` when creating the client to label this socket in `getConnections()` responses.
+
 ## API Reference
 
 ### Connection Management
 
--   `connect(): Promise<void>` - Connect to the FluxionDB server
--   `disconnect(): Promise<void>` - Disconnect from the server
--   `close(): void` - Close the connection (alias for disconnect)
+- `connect(): Promise<void>` - Connect to the FluxionDB server
+- `disconnect(): Promise<void>` - Disconnect from the server
+- `close(): void` - Close the connection (alias for disconnect)
+- `getConnections(): Promise<ConnectionInfo[]>` - List active connections, including the caller
 
 ### Time Series Methods
 
--   `insertMultipleRecords(items: InsertMessageRequest[]): Promise<InsertMessageResponse>` - Insert one or more records
--   `fetchLatestRecords(params: FetchLatestRecordsParams): Promise<Record<string, RecordResponse>>` - Fetch the latest record per document in a collection
--   `fetchRecords(params: FetchRecordsParams): Promise<RecordResponse[]>` - Fetch records for a specific document within a time range
--   `deleteDocument(params: DeleteDocumentParams): Promise<void>` - Delete a document
--   `deleteRecord(params: DeleteRecord): Promise<void>` - Delete a single record
--   `deleteMultipleRecords(params: DeleteRecord[]): Promise<void>` - Delete multiple records
--   `deleteRecordsRange(params: DeleteRecordsRange): Promise<void>` - Delete all records within a timestamp range
+- `insertMultipleRecords(items: InsertMessageRequest[]): Promise<InsertMessageResponse>` - Insert one or more records
+- `fetchLatestRecords(params: FetchLatestRecordsParams): Promise<Record<string, RecordResponse>>` - Fetch the latest record per document in a collection
+- `fetchRecords(params: FetchRecordsParams): Promise<RecordResponse[]>` - Fetch records for a specific document within a time range
+- `deleteDocument(params: DeleteDocumentParams): Promise<void>` - Delete a document
+- `deleteRecord(params: DeleteRecord): Promise<void>` - Delete a single record
+- `deleteMultipleRecords(params: DeleteRecord[]): Promise<void>` - Delete multiple records
+- `deleteRecordsRange(params: DeleteRecordsRange): Promise<void>` - Delete all records within a timestamp range
 
 ### Collection Methods
 
--   `fetchCollections(): Promise<string[]>` - Get all collections
--   `deleteCollection(params: DeleteCollectionParams): Promise<void>` - Delete a collection
+- `fetchCollections(): Promise<string[]>` - Get all collections
+- `deleteCollection(params: DeleteCollectionParams): Promise<void>` - Delete a collection
 
 ### Key-Value Methods
 
--   `setValue(params: SetValueParams): Promise<void>` - Set a key-value pair
--   `getValue(params: GetValueParams): Promise<string>` - Get a value by key
--   `getAllKeys(params: CollectionParam): Promise<string[]>` - Get all keys in a collection
--   `getAllValues(params: CollectionParam): Promise<Record<string, string>>` - Get all key-value pairs
--   `removeValue(params: DeleteValueParams): Promise<void>` - Remove a key-value pair
+- `setValue(params: SetValueParams): Promise<void>` - Set a key-value pair
+- `getValue(params: GetValueParams): Promise<string>` - Get a value by key
+- `getValues(params: GetValuesParams): Promise<Record<string, string>>` - Fetch all key/value pairs or filter by literal/`/regex/` key
+- `getKeys(params: CollectionParam): Promise<string[]>` - Get all keys in a collection
+- `removeValue(params: DeleteValueParams): Promise<void>` - Remove a key-value pair
 
 ### API Key Management
 
--   `addApiKey(params: AddApiKeyParams): Promise<ManageApiKeyResponse>` - Create a scoped API key
--   `removeApiKey(params: RemoveApiKeyParams): Promise<ManageApiKeyResponse>` - Revoke a scoped API key
+- `addApiKey(params: AddApiKeyParams): Promise<ManageApiKeyResponse>` - Create a scoped API key
+- `removeApiKey(params: RemoveApiKeyParams): Promise<ManageApiKeyResponse>` - Revoke a scoped API key
 
 > **Note:** Only the master API key (provided during client initialization) can manage other keys. Scoped keys can only use their granted permissions.
 
@@ -162,10 +141,12 @@ await client.disconnect();
 {
     col: string;     // Collection name
     ts: number;      // Query timestamp
-    doc?: string;    // Optional: filter to specific document
+    doc?: string;    // Optional: literal doc ID or `/regex/flags`
     from?: number;   // Optional: only include records after this ts
 }
 ```
+
+> Pass document filters as either literal IDs or `/regex/flags` strings (for example `/device-.*/i`) to let the server match multiple documents.
 
 ### FetchRecordsParams
 
@@ -191,13 +172,35 @@ await client.disconnect();
 }
 ```
 
+### GetValuesParams
+
+```typescript
+{
+    col: string;    // Collection name
+    key?: string;   // Optional: literal key or `/regex/flags`
+}
+```
+
+Omit `key` to retrieve every key/value pair, or provide a literal/`/regex/` string to constrain the results on the server side.
+
+### ConnectionInfo
+
+```typescript
+{
+    ip: string;     // peer IP address
+    since: number;  // milliseconds since the connection was established
+    self: boolean;  // true when this entry corresponds to the current client
+    name?: string | null; // optional label supplied during connect()
+}
+```
+
 ## API Key Scopes
 
 When creating scoped keys with `addApiKey`, three permission levels are available:
 
--   `"readonly"` - Query operations only
--   `"read_write"` - Read and insert/update operations
--   `"read_write_delete"` - Full access including delete operations
+- `"readonly"` - Query operations only
+- `"read_write"` - Read and insert/update operations
+- `"read_write_delete"` - Full access including delete operations
 
 ```typescript
 await client.addApiKey({
@@ -212,10 +215,10 @@ The client includes automatic reconnection with exponential backoff. It will ret
 
 ## Important Notes
 
--   The `ts` field is a generic numeric coordinate - use seconds, milliseconds, counters, or any monotonic value that fits your use case
--   All `data` fields should be JSON-encoded strings when storing complex objects
--   The client automatically manages the WebSocket connection and appends the API key to requests
--   Choose consistent timestamp units per collection for intuitive queries
+- The `ts` field is a generic numeric coordinate - use seconds, milliseconds, counters, or any monotonic value that fits your use case
+- All `data` fields should be JSON-encoded strings when storing complex objects
+- The client automatically manages the WebSocket connection and appends the API key to requests
+- Choose consistent timestamp units per collection for intuitive queries
 
 ## Development
 

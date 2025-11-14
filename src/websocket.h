@@ -33,6 +33,7 @@ namespace MessageType {
     inline const QString GetAllValues = QStringLiteral("gvals");
     inline const QString GetAllKeys = QStringLiteral("gkeys");
     inline const QString ManageApiKey = QStringLiteral("keys");
+    inline const QString Connections = QStringLiteral("conn");
 }
 
 // comment
@@ -77,6 +78,7 @@ private:
     QString handleDeleteMultipleRecords(QWebSocket* client, const MessageRequest& message);
     QString handleDeleteRecordsRange(QWebSocket* client, const MessageRequest& message);
     QString handleInsert(QWebSocket* client, const MessageRequest& message);
+    QString handleConnections(QWebSocket* client, const MessageRequest& message);
 
     // key value
     QString handleSetValue(QWebSocket* client, const MessageRequest& message);
@@ -117,6 +119,8 @@ private:
     std::unordered_map<QString, ApiKeyScope> m_clientScopes;
     std::unordered_map<QString, ApiKeyEntry> m_apiKeys;
     std::unordered_map<QString, QString> m_clientKeys;
+    std::unordered_map<QString, QString> m_clientNames;
+    std::unordered_map<QString, qint64> m_connectionTimes;
 
     // flush timer
     QTimer m_flushTimer;

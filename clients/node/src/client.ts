@@ -13,6 +13,8 @@ import {
   KeyValueResponse,
   KeyValueAllKeysResponse,
   KeyValueAllValuesResponse,
+  ConnectionInfo,
+  ConnectionsResponse,
   CollectionParam,
   DeleteValueParams,
   InsertMessageRequest,
@@ -43,6 +45,7 @@ const MESSAGE_TYPES = {
   GET_ALL_VALUES: "gvals",
   GET_ALL_KEYS: "gkeys",
   MANAGE_API_KEYS: "keys",
+  CONNECTIONS: "conn",
 } as const;
 
 type WebSocketResponse = {
@@ -55,10 +58,17 @@ type WebSocketMessage = {
   data: string;
 };
 
+type ClientOptions = {
+  url: string;
+  apiKey: string;
+  showLogs?: boolean;
+  connectionName?: string;
+};
+
 class Client {
   private ws: WebSocket | null = null;
   private readonly url: string;
-  private inflightRequests: { [id: string]: (response: any) => void; } = {};
+  private inflightRequests: { [id: string]: (response: any) => void } = {};
   private isConnecting: boolean = false; // Track if we're currently attempting to connect
   private isReconnecting: boolean = false; // Flag to prevent concurrent reconnect attempts
   private reconnectAttempts: number = 0;
@@ -68,19 +78,18 @@ class Client {
   private apiKey: string;
   private shouldReconnect: boolean = true; // Flag to track if reconnection should happen
   private showLogs: boolean = false;
+  private connectionName?: string;
 
   constructor({
     url,
     apiKey,
     showLogs = false,
-  }: {
-    url: string;
-    apiKey: string;
-    showLogs?: boolean;
-  }) {
+    connectionName,
+  }: ClientOptions) {
     this.url = url;
     this.apiKey = apiKey;
     this.showLogs = showLogs;
+    this.connectionName = connectionName;
   }
 
   public async connect(): Promise<void> {
@@ -106,7 +115,12 @@ class Client {
       try {
         // Append API key as query parameter instead of header
         // (Qt 6.4 doesn't support reading custom headers from handshake)
-        const urlWithKey = `${this.url}${this.url.includes("?") ? "&" : "?"}api-key=${encodeURIComponent(this.apiKey)}`;
+        const params = new URLSearchParams();
+        params.set("api-key", this.apiKey);
+        if (this.connectionName && this.connectionName.length > 0) {
+          params.set("name", this.connectionName);
+        }
+        const urlWithKey = `${this.url}${this.url.includes("?") ? "&" : "?"}${params.toString()}`;
         if (this.showLogs) {
           console.log("Connecting to:", urlWithKey);
         }
@@ -338,6 +352,14 @@ class Client {
     return resp.collections;
   }
 
+  public async getConnections(): Promise<ConnectionInfo[]> {
+    const resp = await this.send<ConnectionsResponse>({
+      type: MESSAGE_TYPES.CONNECTIONS,
+      data: "{}",
+    });
+    return resp.connections;
+  }
+
   public async deleteCollection(params: DeleteCollectionParams) {
     await this.send<InsertMessageResponse>({
       type: MESSAGE_TYPES.DELETE_COLLECTION,
@@ -437,16 +459,12 @@ class Client {
   }
 
   public async getValues(params: GetValuesParams) {
+    const type =
+      params.key && params.key.length > 0
+        ? MESSAGE_TYPES.GET_VALUES
+        : MESSAGE_TYPES.GET_ALL_VALUES;
     const resp = await this.send<KeyValueAllValuesResponse>({
-      type: MESSAGE_TYPES.GET_VALUES,
-      data: JSON.stringify(params),
-    });
-    return resp.values;
-  }
-
-  public async getAllValues(params: CollectionParam) {
-    const resp = await this.send<KeyValueAllValuesResponse>({
-      type: MESSAGE_TYPES.GET_ALL_VALUES,
+      type,
       data: JSON.stringify(params),
     });
     return resp.values;
