@@ -24,14 +24,14 @@ jobs:
         run: |
           cd clients/python
           VERSION=$(python3 - <<'PY'
-import pathlib, re, sys
-text = pathlib.Path("pyproject.toml").read_text()
-match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
-if not match:
-    sys.exit("Version not found in pyproject.toml")
-print(match.group(1))
-PY
-)
+          import pathlib, re, sys
+          text = pathlib.Path("pyproject.toml").read_text()
+          match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+          if not match:
+              sys.exit("Version not found in pyproject.toml")
+          print(match.group(1))
+          PY
+          )
           echo "current_version=$VERSION" >> "$GITHUB_OUTPUT"
           if git tag | grep -q "python-client-v$VERSION"; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
