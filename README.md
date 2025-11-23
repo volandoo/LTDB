@@ -10,6 +10,7 @@ FluxionDB is an in-memory time series database exposed over WebSockets. The serv
 -   First-party clients:
     -   Node.js SDK (`clients/node`) published as `@volandoo/fluxiondb-client`
     -   Go SDK (`clients/go`) with examples and docs
+    -   Python SDK (`clients/python`) distributed via `pip`
 -   Docker image (`volandoo/fluxiondb`) for single-command deployment
 
 ---
@@ -54,24 +55,24 @@ Arguments:
 
 All requests are JSON documents. Clients authenticate during the WebSocket handshake by providing an `api-key` query parameter in the connection URL (e.g., `ws://localhost:8080?api-key=YOUR_KEY`). Supply the master key for full access, or a scoped key that you created with the `keys` management message. The legacy `auth` message is no longer accepted by the server.
 
-| Type      | Purpose                                           |
-| --------- | ------------------------------------------------- |
-| `ins`     | Insert one or more records                        |
-| `qry`     | Fetch latest record per document                  |
-| `cols`    | List collections                                  |
-| `qdoc`    | Fetch records for a document                      |
-| `ddoc`    | Delete a document                                 |
-| `dcol`    | Delete a collection                               |
-| `drec`    | Delete a single record                            |
-| `dmrec`   | Delete multiple records                           |
-| `drrng`   | Delete records within a timestamp range           |
-| `sval`    | Set key-value entry                               |
-| `gval`    | Get key-value entry                               |
-| `gvalues` | Get key-value entries by literal key or `/regex/` |
-| `rval`    | Remove key-value entry                            |
-| `gvals`   | Fetch all key-value entries                       |
-| `gkeys`   | Fetch all keys                                    |
-| `keys`    | Manage API keys (add/remove scoped keys)          |
+| Type      | Purpose                                                        |
+| --------- | -------------------------------------------------------------- |
+| `ins`     | Insert one or more records                                     |
+| `qry`     | Fetch latest record per document                               |
+| `cols`    | List collections                                               |
+| `qdoc`    | Fetch records for a document                                   |
+| `ddoc`    | Delete a document                                              |
+| `dcol`    | Delete a collection                                            |
+| `drec`    | Delete a single record                                         |
+| `dmrec`   | Delete multiple records                                        |
+| `drrng`   | Delete records within a timestamp range                        |
+| `sval`    | Set key-value entry                                            |
+| `gval`    | Get key-value entry                                            |
+| `gvalues` | Get key-value entries by literal key or `/regex/`              |
+| `rval`    | Remove key-value entry                                         |
+| `gvals`   | Fetch all key-value entries                                    |
+| `gkeys`   | Fetch all keys                                                 |
+| `keys`    | Manage API keys (add/remove scoped keys)                       |
 | `conn`    | List active client connections (IP, elapsed ms, optional name) |
 
 The `doc` field in `qry` requests and the `key` field in `gvalues` requests both accept `/pattern/flags` strings (e.g. `/device-.*/i`). Literal values continue to work as before; the server only compiles the expression when the payload starts with `/` and contains a trailing `/`.
@@ -235,13 +236,14 @@ Omit the `Key` pointer when calling `client.GetValues` to return the entire coll
 -   `qmake6 fluxiondb.pro && make` – native build (requires Qt 6 Core + WebSockets)
 -   `cd clients/node && npm install && npm run build` – build Node client bundle
 -   `cd clients/go && go test ./...` – run Go client tests
+-   `cd clients/python && pip install -e . && pytest` – run Python client tests
 
 ### Repository Layout
 
 -   `src/` – Qt/C++17 server sources
 -   `clients/node/` – Node.js SDK (TypeScript)
 -   `clients/go/` – Go SDK
--   `tmp_data/` – sample data mount point when running locally
+-   `clients/python/` – Python SDK
 
 ---
 

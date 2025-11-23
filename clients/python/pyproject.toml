@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fluxiondb-client"
+version = "0.1.0"
+description = "Official FluxionDB Python client"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Volandoo" }]
+license = { text = "Apache-2.0" }
+dependencies = [
+    "typing-extensions>=4.7",
+    "websocket-client>=1.6,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/volandoo/fluxiondb"
+
+[tool.setuptools.packages.find]
+where = ["src"]
